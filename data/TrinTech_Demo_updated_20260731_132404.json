@@ -1,0 +1,158 @@
+{
+  "audit_metadata": {
+    "client_name": "TrinTech Demo",
+    "domain": "demo.com",
+    "public_ip": "1.1.1.1",
+    "auditor": "TrinTech Digital Defense",
+    "date": "2026-07-31T13:22:50.596454",
+    "compliance_frameworks": [
+      "NIST_CSF",
+      "CIS_v8",
+      "HIPAA"
+    ],
+    "version": "1.0.0",
+    "industry": "Technology",
+    "framework_version": "4.0.0"
+  },
+  "external_scan": {
+    "open_ports": [],
+    "vulnerabilities": [],
+    "risk_score": 0,
+    "scan_timestamp": "2026-07-31T13:23:50.251950"
+  },
+  "saas_posture": {
+    "score_grade": "F",
+    "score": 15,
+    "checks": {
+      "spf": {
+        "passed": false,
+        "record": ""
+      },
+      "dkim": {
+        "passed": false,
+        "record": ""
+      },
+      "dmarc": {
+        "passed": false,
+        "record": ""
+      },
+      "mx": [],
+      "web_headers": {
+        "Strict-Transport-Security": "max-age=31536000",
+        "X-Frame-Options": "deny",
+        "Referrer-Policy": "no-referrer-when-downgrade"
+      }
+    },
+    "findings": [
+      {
+        "severity": "critical",
+        "title": "Missing SPF Record",
+        "detail": "Email spoofing possible. Configure SPF immediately."
+      },
+      {
+        "severity": "high",
+        "title": "Missing DKIM",
+        "detail": "Emails may be modified in transit"
+      },
+      {
+        "severity": "critical",
+        "title": "Missing DMARC",
+        "detail": "No email authentication policy"
+      },
+      {
+        "severity": "high",
+        "title": "No MX Records",
+        "detail": "Email may not be configured"
+      },
+      {
+        "severity": "good",
+        "title": "Strict-Transport-Security Present",
+        "detail": "max-age=31536000"
+      },
+      {
+        "severity": "medium",
+        "title": "Missing Content-Security-Policy",
+        "detail": "Recommended security header not set"
+      },
+      {
+        "severity": "good",
+        "title": "X-Frame-Options Present",
+        "detail": "deny"
+      }
+    ],
+    "scan_timestamp": "2026-07-31T13:24:04.845522"
+  },
+  "policy_compliance": {
+    "responses": [
+      {
+        "question_id": "POL-001",
+        "compliant": false,
+        "evidence": "Automated baseline check",
+        "critical": true
+      },
+      {
+        "question_id": "POL-002",
+        "compliant": false,
+        "evidence": "Automated baseline check",
+        "critical": true
+      },
+      {
+        "question_id": "POL-003",
+        "compliant": true,
+        "evidence": "Automated baseline check",
+        "critical": false
+      },
+      {
+        "question_id": "POL-004",
+        "compliant": false,
+        "evidence": "Automated baseline check",
+        "critical": true
+      },
+      {
+        "question_id": "POL-005",
+        "compliant": false,
+        "evidence": "Automated baseline check",
+        "critical": false
+      }
+    ],
+    "overall_compliance_percentage": 20.0,
+    "timestamp": "2026-07-31T13:23:50.284060"
+  },
+  "phishing_results": {
+    "emails_sent": 0,
+    "clicks": 0,
+    "reporters": 0,
+    "risk_profile": "Not Assessed"
+  },
+  "breach_exposure": {
+    "compromised_credentials": 33,
+    "findings": [
+      {
+        "severity": "critical",
+        "type": "weak_passwords",
+        "title": "Weak Password Patterns Exposed in Data Breaches",
+        "description": "Found 33 organization password patterns present in breach databases.",
+        "compromised_patterns": [
+          "demoadmin (44,015 breaches)",
+          "password123 (2,266,543 breaches)",
+          "000000 (12,866,377 breaches)",
+          "sunshine (2,504,682 breaches)",
+          "password (52,372,427 breaches)",
+          "welcome (2,474,128 breaches)",
+          "12345678 (70,606,130 breaches)",
+          "dragon (4,415,380 breaches)",
+          "ashley (1,727,971 breaches)",
+          "1q2w3e4r (7,322,046 breaches)"
+        ]
+      }
+    ],
+    "risk_level": "critical",
+    "scan_timestamp": "2026-07-31T13:24:03.075122"
+  },
+  "final_report": {
+    "executive_summary": "",
+    "risk_score": 0,
+    "estimated_financial_impact": "",
+    "remediation_plan": []
+  }
+}

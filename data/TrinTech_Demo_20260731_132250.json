@@ -1,0 +1,57 @@
+{
+  "audit_metadata": {
+    "client_name": "TrinTech Demo",
+    "domain": "demo.com",
+    "public_ip": "1.1.1.1",
+    "auditor": "TrinTech Digital Defense",
+    "date": "2026-07-31T13:22:50.596454",
+    "compliance_frameworks": [
+      "NIST_CSF",
+      "CIS_v8",
+      "HIPAA"
+    ],
+    "version": "1.0.0",
+    "industry": "Technology",
+    "framework_version": "4.0.0"
+  },
+  "external_scan": {
+    "open_ports": [],
+    "services": [],
+    "vulnerabilities": [],
+    "supply_chain_findings": [],
+    "risk_score": 0,
+    "scan_timestamp": ""
+  },
+  "saas_posture": {
+    "mfa_status": {
+      "enforced_users": 0,
+      "total_users": 0,
+      "non_compliant_accounts": []
+    },
+    "oauth_apps": [],
+    "public_sharing_findings": [],
+    "score_grade": "N/A"
+  },
+  "policy_compliance": {
+    "responses": [],
+    "overall_compliance_percentage": 0,
+    "framework_gaps": {}
+  },
+  "phishing_results": {
+    "emails_sent": 0,
+    "clicks": 0,
+    "reporters": 0,
+    "risk_profile": "Not Assessed"
+  },
+  "breach_exposure": {
+    "compromised_credentials": 0,
+    "reused_passwords": 0,
+    "findings": []
+  },
+  "final_report": {
+    "executive_summary": "",
+    "risk_score": 0,
+    "estimated_financial_impact": "",
+    "remediation_plan": []
+  }
+}

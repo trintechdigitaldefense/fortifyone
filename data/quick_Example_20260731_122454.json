@@ -1,0 +1,152 @@
+{
+  "audit_metadata": {
+    "client_name": "Example",
+    "domain": "example.com",
+    "public_ip": "104.20.23.154",
+    "auditor": "TrinTech Digital Defense",
+    "date": "2026-07-31T12:24:39.587484",
+    "compliance_frameworks": [
+      "NIST_CSF",
+      "CIS_v8",
+      "HIPAA"
+    ],
+    "version": "1.0.0"
+  },
+  "external_scan": {
+    "open_ports": [],
+    "services": [],
+    "vulnerabilities": [
+      "[DNS] Domain resolves to 172.66.147.243, but target IP is 104.20.23.154"
+    ],
+    "supply_chain_findings": [],
+    "risk_score": 0,
+    "scan_timestamp": "2026-07-31T12:24:40.725174"
+  },
+  "saas_posture": {
+    "mfa_status": {
+      "enforced_users": 0,
+      "total_users": 0,
+      "non_compliant_accounts": []
+    },
+    "oauth_apps": [],
+    "public_sharing_findings": [],
+    "score_grade": "N/A"
+  },
+  "policy_compliance": {
+    "responses": [],
+    "overall_compliance_percentage": 0,
+    "framework_gaps": {}
+  },
+  "phishing_results": {
+    "emails_sent": 0,
+    "clicks": 0,
+    "reporters": 0,
+    "risk_profile": "Not Assessed"
+  },
+  "breach_exposure": {
+    "compromised_credentials": 19,
+    "reused_passwords": 19,
+    "findings": [
+      {
+        "severity": "info",
+        "type": "config_note",
+        "title": "HIBP Integration Not Configured",
+        "description": "Configure HIBP_API_KEY environment variable for breach checking."
+      },
+      {
+        "severity": "critical",
+        "type": "weak_passwords",
+        "title": "Weak/Common Password Patterns Detected",
+        "description": "Found 19 common password patterns that have been previously breached",
+        "compromised_patterns": [
+          {
+            "password": "example123",
+            "exposure_count": 4623
+          },
+          {
+            "password": "example2024",
+            "exposure_count": 1
+          },
+          {
+            "password": "example!",
+            "exposure_count": 199
+          },
+          {
+            "password": "example@example",
+            "exposure_count": 1
+          },
+          {
+            "password": "password",
+            "exposure_count": 52372427
+          },
+          {
+            "password": "123456",
+            "exposure_count": 210461208
+          },
+          {
+            "password": "12345678",
+            "exposure_count": 70606130
+          },
+          {
+            "password": "qwerty",
+            "exposure_count": 30812897
+          },
+          {
+            "password": "abc123",
+            "exposure_count": 12994280
+          },
+          {
+            "password": "monkey",
+            "exposure_count": 3964183
+          },
+          {
+            "password": "letmein",
+            "exposure_count": 1406604
+          },
+          {
+            "password": "dragon",
+            "exposure_count": 4415380
+          },
+          {
+            "password": "111111",
+            "exposure_count": 15943793
+          },
+          {
+            "password": "baseball",
+            "exposure_count": 1937864
+          },
+          {
+            "password": "iloveyou",
+            "exposure_count": 7007935
+          },
+          {
+            "password": "trustno1",
+            "exposure_count": 1580933
+          },
+          {
+            "password": "sunshine",
+            "exposure_count": 2504682
+          },
+          {
+            "password": "master",
+            "exposure_count": 2209906
+          },
+          {
+            "password": "welcome",
+            "exposure_count": 2474128
+          }
+        ]
+      }
+    ],
+    "risk_level": "critical",
+    "scan_timestamp": "2026-07-31T12:24:54.177762",
+    "domain": "example.com",
+    "total_exposures": 0
+  },
+  "final_report": {
+    "executive_summary": "",
+    "risk_score": 0,
+    "estimated_financial_impact": "",
+    "remediation_plan": []
+  }
+}

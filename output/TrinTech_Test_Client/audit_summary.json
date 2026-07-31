@@ -1,0 +1,152 @@
+{
+  "audit_metadata": {
+    "client_name": "TrinTech Test Client",
+    "domain": "example.com",
+    "public_ip": "93.184.216.34",
+    "auditor": "TrinTech Digital Defense",
+    "date": "2026-07-31T13:04:17.205456",
+    "compliance_frameworks": [
+      "NIST_CSF",
+      "CIS_v8",
+      "HIPAA"
+    ],
+    "version": "1.0.0"
+  },
+  "external_scan": {
+    "open_ports": [],
+    "vulnerabilities": [],
+    "risk_score": 0,
+    "scan_timestamp": "2026-07-31T13:04:18.936240"
+  },
+  "saas_posture": {
+    "score_grade": "F",
+    "score": 5,
+    "checks": {
+      "spf": {
+        "passed": false,
+        "record": ""
+      },
+      "dkim": {
+        "passed": false,
+        "record": ""
+      },
+      "dmarc": {
+        "passed": false,
+        "record": ""
+      },
+      "mx": [],
+      "web_headers": {}
+    },
+    "findings": [
+      {
+        "severity": "critical",
+        "title": "Missing SPF Record",
+        "detail": "Email spoofing possible. Configure SPF immediately."
+      },
+      {
+        "severity": "high",
+        "title": "Missing DKIM",
+        "detail": "Emails may be modified in transit"
+      },
+      {
+        "severity": "critical",
+        "title": "Missing DMARC",
+        "detail": "No email authentication policy"
+      },
+      {
+        "severity": "high",
+        "title": "No MX Records",
+        "detail": "Email may not be configured"
+      },
+      {
+        "severity": "medium",
+        "title": "Missing Strict-Transport-Security",
+        "detail": "Recommended security header not set"
+      },
+      {
+        "severity": "medium",
+        "title": "Missing Content-Security-Policy",
+        "detail": "Recommended security header not set"
+      },
+      {
+        "severity": "medium",
+        "title": "Missing X-Frame-Options",
+        "detail": "Recommended security header not set"
+      }
+    ],
+    "scan_timestamp": "2026-07-31T13:04:36.086985"
+  },
+  "policy_compliance": {
+    "responses": [
+      {
+        "question_id": "POL-001",
+        "compliant": false,
+        "evidence": "Automated baseline check",
+        "critical": true
+      },
+      {
+        "question_id": "POL-002",
+        "compliant": false,
+        "evidence": "Automated baseline check",
+        "critical": true
+      },
+      {
+        "question_id": "POL-003",
+        "compliant": true,
+        "evidence": "Automated baseline check",
+        "critical": false
+      },
+      {
+        "question_id": "POL-004",
+        "compliant": false,
+        "evidence": "Automated baseline check",
+        "critical": true
+      },
+      {
+        "question_id": "POL-005",
+        "compliant": false,
+        "evidence": "Automated baseline check",
+        "critical": false
+      }
+    ],
+    "overall_compliance_percentage": 20.0,
+    "timestamp": "2026-07-31T13:04:18.981569"
+  },
+  "phishing_results": {
+    "emails_sent": 0,
+    "clicks": 0,
+    "reporters": 0,
+    "risk_profile": "Not Assessed"
+  },
+  "breach_exposure": {
+    "compromised_credentials": 38,
+    "findings": [
+      {
+        "severity": "critical",
+        "type": "weak_passwords",
+        "title": "Weak Password Patterns Exposed in Data Breaches",
+        "description": "Found 38 organization password patterns present in breach databases.",
+        "compromised_patterns": [
+          "michael (2,332,542 breaches)",
+          "sunshine (2,504,682 breaches)",
+          "admin (42,266,086 breaches)",
+          "ashley (1,727,971 breaches)",
+          "test@example (1 breaches)",
+          "dragon (4,415,380 breaches)",
+          "test! (1,780 breaches)",
+          "password123 (2,266,543 breaches)",
+          "baseball (1,937,864 breaches)",
+          "test123 (1,383,480 breaches)"
+        ]
+      }
+    ],
+    "risk_level": "critical",
+    "scan_timestamp": "2026-07-31T13:04:35.707421"
+  },
+  "final_report": {
+    "executive_summary": "",
+    "risk_score": 0,
+    "estimated_financial_impact": "",
+    "remediation_plan": []
+  }
+}

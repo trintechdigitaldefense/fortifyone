@@ -1,0 +1,277 @@
+#!/usr/bin/env python3
+"""
+ReconVision - Enhanced External Footprint Scanner
+Integrates Nmap active scanning + Censys passive reconnaissance
+TrinTech Digital Defense
+"""
+
+import json
+import subprocess
+import datetime
+import os
+import socket
+
+def run_scan(audit_data: dict) -> dict:
+    """
+    Perform external scan using both active (nmap) and passive (Censys) techniques.
+    Memory-optimized for constrained environments.
+    """
+    target_ip = audit_data["audit_metadata"]["public_ip"]
+    domain = audit_data["audit_metadata"]["domain"]
+    
+    print(f"\n[RECONVISION] Scanning {target_ip} ({domain})...")
+    
+    findings = []
+    open_ports = []
+    
+    # =============================================
+    # PHASE 1: Passive Reconnaissance via Censys
+    # =============================================
+    try:
+        censys_api_id = os.environ.get('CENSYS_API_ID', '')
+        censys_api_secret = os.environ.get('CENSYS_API_SECRET', '')
+        
+        if censys_api_secret and censys_api_secret != '':
+            print("[RECONVISION] Censys API key detected - performing passive reconnaissance...")
+            
+            from censys.search import CensysHosts
+            h = CensysHosts()
+            
+            try:
+                # Query Censys for host information
+                query = h.view(target_ip)
+                
+                # Extract services from Censys
+                for service in query.get('services', []):
+                    port = service.get('port')
+                    service_name = service.get('service_name', 'unknown')
+                    transport = service.get('transport_protocol', 'tcp')
+                    
+                    if port:
+                        port_info = {
+                            "port": str(port),
+                            "service": service_name,
+                            "protocol": transport,
+                            "source": "censys_passive",
+                            "risk_level": assess_risk(str(port), service_name)
+                        }
+                        open_ports.append(port_info)
+                        findings.append(f"[PASSIVE] Port {port}/{transport} ({service_name}) observed via Censys")
+                
+                # Check for software vulnerabilities
+                for software in query.get('software', []):
+                    if software.get('vulnerabilities'):
+                        findings.append(f"[VULN] {software.get('product')} has known CVEs")
+                
+                # Check for exposed services
+                labels = query.get('labels', [])
+                if 'rdp' in labels:
+                    findings.append("[CRITICAL] RDP service publicly visible")
+                if 'smb' in labels:
+                    findings.append("[CRITICAL] SMB service publicly visible")
+                    
+                print(f"[RECONVISION] Censys found {len(open_ports)} services")
+                
+            except Exception as e:
+                print(f"[RECONVISION] Censys query failed: {e}")
+        else:
+            print("[RECONVISION] No Censys API key - skipping passive scan")
+            
+    except ImportError:
+        print("[RECONVISION] Censys library not installed - skipping passive scan")
+    except Exception as e:
+        print(f"[RECONVISION] Censys error: {e}")
+    
+    # =============================================
+    # PHASE 2: Active Scanning via Nmap
+    # =============================================
+    print("[RECONVISION] Starting active Nmap scan...")
+    
+    try:
+        # Memory-optimized nmap scan
+        nmap_cmd = [
+            "nmap",
+            "-sS",              # Stealth SYN scan
+            "-T4",              # Aggressive timing
+            "--top-ports", "100",  # Only most common ports
+            "-sV",              # Service version detection
+            "--version-intensity", "3",  # Light version detection
+            "-oX", "-",         # XML output to stdout
+            target_ip
+        ]
+        
+        result = subprocess.run(
+            nmap_cmd,
+            capture_output=True,
+            text=True,
+            timeout=180
+        )
+        
+        if result.returncode == 0 and result.stdout:
+            # Parse XML output
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(result.stdout)
+            
+            for port in root.findall('.//port'):
+                port_id = port.get('portid')
+                state = port.find('state')
+                
+                if state is not None and state.get('state') == 'open':
+                    service = port.find('service')
+                    service_name = service.get('name', 'unknown') if service is not None else 'unknown'
+                    product = service.get('product', '') if service is not None else ''
+                    version = service.get('version', '') if service is not None else ''
+                    
+                    port_info = {
+                        "port": port_id,
+                        "service": service_name,
+                        "product": product,
+                        "version": version,
+                        "protocol": port.get('protocol', 'tcp'),
+                        "source": "nmap_active",
+                        "risk_level": assess_risk(port_id, service_name)
+                    }
+                    
+                    # Avoid duplicates from Censys
+                    if not any(p['port'] == port_id for p in open_ports):
+                        open_ports.append(port_info)
+                    
+                    findings.append(f"[ACTIVE] Port {port_id} ({service_name} {product} {version}) OPEN")
+        
+        # Also do a quick DNS check
+        try:
+            socket.gethostbyname(domain)
+            findings.append(f"[DNS] Domain {domain} resolves successfully")
+        except:
+            findings.append(f"[DNS] WARNING: Domain {domain} does not resolve")
+        
+        # Check for email security
+        email_checks = check_email_security(domain)
+        findings.extend(email_checks)
+        
+    except subprocess.TimeoutExpired:
+        findings.append("[ERROR] Nmap scan timed out - target may be blocking probes")
+    except Exception as e:
+        findings.append(f"[ERROR] Scan error: {str(e)}")
+    
+    # =============================================
+    # Update audit data
+    # =============================================
+    audit_data["external_scan"]["open_ports"] = open_ports
+    audit_data["external_scan"]["services"] = [p['service'] for p in open_ports]
+    audit_data["external_scan"]["vulnerabilities"] = findings
+    audit_data["external_scan"]["risk_score"] = calculate_risk_score(open_ports)
+    audit_data["external_scan"]["scan_timestamp"] = datetime.datetime.now().isoformat()
+    
+    # Print summary
+    critical_ports = [p for p in open_ports if p['risk_level'] == 'critical']
+    high_ports = [p for p in open_ports if p['risk_level'] == 'high']
+    
+    print(f"\n[RECONVISION] Scan Complete:")
+    print(f"  Total open ports: {len(open_ports)}")
+    print(f"  Critical: {len(critical_ports)}")
+    print(f"  High risk: {len(high_ports)}")
+    print(f"  Overall risk score: {audit_data['external_scan']['risk_score']}/100")
+    
+    return audit_data
+
+def assess_risk(port: str, service: str) -> str:
+    """Assess risk level of an open port/service."""
+    port = str(port)
+    service = service.lower()
+    
+    critical_ports = {
+        '3389': 'RDP - Remote Desktop (ransomware vector)',
+        '445': 'SMB - File sharing (WannaCry vector)',
+        '135': 'RPC - Remote Procedure Call',
+        '139': 'NetBIOS - Legacy Windows networking'
+    }
+    
+    high_risk_ports = {
+        '22': 'SSH - Remote access',
+        '23': 'Telnet - Insecure remote access',
+        '21': 'FTP - Insecure file transfer',
+        '1433': 'MSSQL - Database server',
+        '3306': 'MySQL - Database server',
+        '5900': 'VNC - Remote desktop',
+        '6379': 'Redis - In-memory database'
+    }
+    
+    if port in critical_ports:
+        return 'critical'
+    elif port in high_risk_ports:
+        return 'high'
+    elif service in ['http', 'https']:
+        return 'medium'
+    else:
+        return 'low'
+
+def calculate_risk_score(open_ports: list) -> int:
+    """Calculate overall risk score based on open ports."""
+    if not open_ports:
+        return 0
+    
+    score = 0
+    
+    risk_weights = {
+        'critical': 25,
+        'high': 15,
+        'medium': 5,
+        'low': 1
+    }
+    
+    for port in open_ports:
+        level = port.get('risk_level', 'low')
+        score += risk_weights.get(level, 1)
+    
+    return min(score, 100)
+
+def check_email_security(domain: str) -> list:
+    """Quick check for email security configurations."""
+    findings = []
+    
+    # SPF check
+    try:
+        result = subprocess.run(
+            ['nslookup', '-type=txt', domain],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if 'v=spf1' in result.stdout.lower():
+            findings.append(f"[EMAIL] SPF record found for {domain}")
+        else:
+            findings.append(f"[EMAIL] WARNING: No SPF record - email spoofing possible")
+    except:
+        findings.append(f"[EMAIL] Could not check SPF for {domain}")
+    
+    # DMARC check
+    try:
+        result = subprocess.run(
+            ['nslookup', '-type=txt', f'_dmarc.{domain}'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if 'v=DMARC1' in result.stdout:
+            findings.append(f"[EMAIL] DMARC record found for {domain}")
+        else:
+            findings.append(f"[EMAIL] WARNING: No DMARC record - email authentication weak")
+    except:
+        findings.append(f"[EMAIL] Could not check DMARC for {domain}")
+    
+    return findings
+
+if __name__ == "__main__":
+    # Test with the Riverside Dental Group data
+    test_data = {
+        "audit_metadata": {
+            "public_ip": "203.0.113.45",
+            "domain": "riversidedental.com",
+            "client_name": "Test"
+        },
+        "external_scan": {}
+    }
+    result = run_scan(test_data)
+    print("\nFinal results:")
+    print(json.dumps(result["external_scan"], indent=2))

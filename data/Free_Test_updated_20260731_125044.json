@@ -1,0 +1,175 @@
+{
+  "audit_metadata": {
+    "client_name": "Free Test",
+    "domain": "example.com",
+    "public_ip": "93.184.216.34",
+    "auditor": "TrinTech Digital Defense",
+    "date": "2026-07-31T12:39:37.363639",
+    "compliance_frameworks": [
+      "NIST_CSF",
+      "CIS_v8",
+      "HIPAA"
+    ],
+    "version": "1.0.0"
+  },
+  "external_scan": {
+    "open_ports": [],
+    "services": [],
+    "vulnerabilities": [
+      "[DNS] Domain resolves to 172.66.147.243, but target IP is 93.184.216.34"
+    ],
+    "supply_chain_findings": [],
+    "risk_score": 0,
+    "scan_timestamp": "2026-07-31T12:47:08.305095"
+  },
+  "saas_posture": {
+    "mfa_status": {
+      "enforced_users": 0,
+      "total_users": 0,
+      "non_compliant_accounts": []
+    },
+    "oauth_apps": [],
+    "public_sharing_findings": [],
+    "score_grade": "N/A"
+  },
+  "policy_compliance": {
+    "responses": [
+      {
+        "question_id": "POL-001",
+        "compliant": true,
+        "evidence": "y",
+        "frameworks": {
+          "HIPAA": "164.308(a)(1)",
+          "CIS_v8": "5.1",
+          "NIST_CSF": "PR.AT-1"
+        },
+        "critical": true,
+        "timestamp": "2026-07-31T12:49:39.062946"
+      },
+      {
+        "question_id": "POL-002",
+        "compliant": true,
+        "evidence": "y",
+        "frameworks": {
+          "HIPAA": "164.312(d)",
+          "CIS_v8": "6.5",
+          "NIST_CSF": "PR.AC-7"
+        },
+        "critical": true,
+        "timestamp": "2026-07-31T12:49:45.088222"
+      },
+      {
+        "question_id": "POL-003",
+        "compliant": true,
+        "evidence": "y",
+        "frameworks": {
+          "HIPAA": "164.308(a)(3)",
+          "CIS_v8": "5.2",
+          "NIST_CSF": "PR.IP-11"
+        },
+        "critical": false,
+        "timestamp": "2026-07-31T12:49:47.857852"
+      },
+      {
+        "question_id": "POL-004",
+        "compliant": true,
+        "evidence": "y",
+        "frameworks": {
+          "HIPAA": "164.308(a)(6)",
+          "CIS_v8": "17.5",
+          "NIST_CSF": "RS.RP-1"
+        },
+        "critical": true,
+        "timestamp": "2026-07-31T12:49:50.448425"
+      },
+      {
+        "question_id": "POL-005",
+        "compliant": true,
+        "evidence": "y",
+        "frameworks": {
+          "HIPAA": "164.308(a)(5)",
+          "CIS_v8": "7.3",
+          "NIST_CSF": "PR.IP-12"
+        },
+        "critical": false,
+        "timestamp": "2026-07-31T12:49:53.521869"
+      }
+    ],
+    "overall_compliance_percentage": 100.0,
+    "framework_gaps": {}
+  },
+  "phishing_results": {
+    "emails_sent": 0,
+    "clicks": 0,
+    "reporters": 0,
+    "risk_profile": "Not Assessed"
+  },
+  "breach_exposure": {
+    "compromised_credentials": 45,
+    "reused_passwords": 40,
+    "findings": [
+      {
+        "severity": "critical",
+        "type": "weak_passwords",
+        "title": "Weak Password Patterns Detected",
+        "description": "40 common passwords found in breach databases (25 critical)",
+        "compromised_patterns": [
+          "test123 (1,383,480 breaches)",
+          "abc123 (12,994,280 breaches)",
+          "password123 (2,266,543 breaches)",
+          "exampleadmin (2 breaches)",
+          "baseball (1,937,864 breaches)",
+          "ashley (1,727,971 breaches)",
+          "000000 (12,866,377 breaches)",
+          "shadow (2,086,042 breaches)",
+          "test123! (27,652 breaches)",
+          "welcome (2,474,128 breaches)"
+        ]
+      },
+      {
+        "severity": "critical",
+        "type": "worst_password",
+        "title": "Highly Vulnerable Password Pattern: 'password'",
+        "description": "Found in 52,372,427 breaches. This password is effectively unusable."
+      },
+      {
+        "severity": "critical",
+        "type": "worst_password",
+        "title": "Highly Vulnerable Password Pattern: '123456'",
+        "description": "Found in 210,461,208 breaches. This password is effectively unusable."
+      },
+      {
+        "severity": "critical",
+        "type": "worst_password",
+        "title": "Highly Vulnerable Password Pattern: 'admin'",
+        "description": "Found in 42,266,086 breaches. This password is effectively unusable."
+      },
+      {
+        "severity": "critical",
+        "type": "worst_password",
+        "title": "Highly Vulnerable Password Pattern: 'letmein'",
+        "description": "Found in 1,406,604 breaches. This password is effectively unusable."
+      },
+      {
+        "severity": "critical",
+        "type": "worst_password",
+        "title": "Highly Vulnerable Password Pattern: 'free'",
+        "description": "Found in 195,003 breaches. This password is effectively unusable."
+      }
+    ],
+    "risk_level": "critical",
+    "scan_timestamp": "2026-07-31T12:50:44.301554",
+    "domain": "example.com",
+    "methods_used": [
+      "hibp_password_free",
+      "hibp_public_api",
+      "local_database"
+    ]
+  },
+  "final_report": {
+    "executive_summary": "",
+    "risk_score": 0,
+    "estimated_financial_impact": "",
+    "remediation_plan": []
+  }
+}
