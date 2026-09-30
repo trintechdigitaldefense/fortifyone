@@ -1,14 +1,23 @@
 # 🔐 FortifyOne Audit Framework
 
-[![Version](https://img.shields.io/badge/version-4.0.0-blue)](https://github.com/trintechdigitaldefense/fortifyone)
+[![Version](https://img.shields.io/badge/version-4.1.0-blue)](https://github.com/trintechdigitaldefense/fortifyone)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8%2B-yellow)](https://python.org)
+[![Hardened](https://img.shields.io/badge/security-hardened-brightgreen)](https://github.com/trintechdigitaldefense/fortifyone)
 
 **Complete Cybersecurity Audit Framework for Local Businesses**
 
 Built by [TrinTech Digital Defense](https://trintechdigitaldefense.github.io)
 
 > *"Securing Your Digital World"*
+
+---
+
+## ⚠ AUTHORIZED USE ONLY
+
+This tool is intended **exclusively for authorized security assessments**.  
+Unauthorized scanning of systems you do not own or lack written permission to test is **illegal** under the Trinidad & Tobago Cybercrime Act and equivalent laws worldwide.  
+TrinTech Digital Defense accepts **no liability** for misuse.
 
 ---
 
@@ -19,7 +28,7 @@ fortifyone quick --domain "example.com" --industry "Healthcare"
 ```
 
 **In under 60 seconds, you get:**
-- 🔍 External vulnerability scan (Nmap + Shodan)
+- 🔍 External vulnerability scan (Nmap + optional Shodan)
 - 📋 Compliance baseline (HIPAA, NIST CSF, CIS v8)
 - 🔐 Credential exposure check (100% free, k-anonymity)
 - ☁️ SaaS security posture (SPF/DKIM/DMARC/headers)
@@ -67,8 +76,8 @@ python3 main.py info
 
 ### Requirements
 - Python 3.8+
-- Nmap (`apt install nmap`)
-- 4GB RAM (runs on Android/Termux, Linux, macOS)
+- Nmap (`apt install nmap` / `pkg install nmap` on Termux)
+- 4GB RAM recommended (runs on Android/Termux, Linux, macOS)
 
 ---
 
@@ -95,14 +104,13 @@ fortifyone list
 ```
 ┌─────────────────────────────────────────────┐
 │                 main.py                      │
-│         (Branded Orchestrator)               │
+│         (Branded Orchestrator v4.1)          │
 └──────┬──────┬──────┬──────┬──────┬──────────┘
        │      │      │      │      │
        ▼      ▼      ▼      ▼      ▼
   ┌─────────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────────┐
   │ReconVision│ │Policy│ │Breach│ │SaaS- │ │Report    │
-  │External  │ │Engine│ │Vault │ │Sentinel│ │Genius   │
-  │Scan      │ │      │ │      │ │      │ │          │
+  │+ Shodan  │ │Engine│ │Vault │ │Sentinel│ │Genius   │
   └────┬─────┘ └──┬───┘ └──┬───┘ └──┬───┘ └────┬─────┘
        │         │       │       │         │
        ▼         ▼       ▼       ▼         ▼
@@ -120,11 +128,12 @@ fortifyone list
 
 ## 🔧 Modules
 
-### 🔍 ReconVision — External Scanning
-- Stealth SYN port scan (Nmap)
+### 🔍 ReconVision — External Scanning (Hardened)
+- Strict IP + domain validation before any scan
+- Stealth SYN port scan (Nmap) with safer flags
 - Service version fingerprinting
-- DNS and email security checks
-- Shodan/Censys passive reconnaissance (optional)
+- Optional Shodan enrichment (CVE + historical data)
+- Refuses localhost / zero addresses
 - **Output:** Open ports, risk score (0-100), vulnerability flags
 
 ### 📋 PolicyEngine — Compliance Baseline
@@ -138,7 +147,6 @@ fortifyone list
 - 100% FREE — no API keys required
 - k-anonymity password checking (HIBP)
 - Organization-specific pattern analysis
-- Local breach database support
 - **Privacy:** Only first 5 SHA-1 characters sent externally
 - **Output:** Compromised credentials count, risk level, top breached passwords
 
@@ -148,7 +156,7 @@ fortifyone list
 - DMARC policy strength grading
 - Email provider identification (M365, Google Workspace)
 - HTTP security headers check
-- **Output:** Letter grade (A+ to F), security score (0-100)
+- **Output:** Letter grade (A–F), security score (0-100)
 
 ### 📊 ReportGenius — Deliverables
 - Interactive HTML with D3.js attack path simulation
@@ -211,7 +219,7 @@ All core features work with **zero paid APIs**. These enhance scanning:
 | HIBP | `HIBP_API_KEY` | Yes | Email breach searches |
 
 ```bash
-# Add to ~/.bashrc
+# Add to ~/.bashrc or ~/.zshrc
 export SHODAN_API_KEY="your-key"
 export CENSYS_API_ID="your-id"
 export CENSYS_API_SECRET="your-secret"
@@ -220,12 +228,24 @@ export HIBP_API_KEY="your-key"
 
 ---
 
-## 🛡️ Privacy & Security
+## 🛡️ Privacy, Security & Hardening (v4.1)
 
-- **Passwords:** SHA-1 hashed locally. Only 5 hex chars sent to HIBP (k-anonymity model)
-- **Data:** All audit data stored locally. Nothing sent to cloud.
-- **Network:** Scans target IP only. No data exfiltration.
-- **APIs:** All integrations are read-only.
+**What was hardened:**
+- Strict IP and domain validation before any network activity
+- Client names sanitized (no path traversal)
+- Audit files written with `0o600` permissions
+- Subprocess calls use list form only (no shell injection)
+- Shodan module never leaks API keys in errors
+- Localhost / zero addresses refused
+- Authorized-use notice displayed on every major command
+- `.gitignore` added for `data/`, `output/`, secrets, `__pycache__`
+- Dependency versions pinned
+
+**Privacy guarantees:**
+- Passwords: SHA-1 hashed locally. Only first 5 hex chars sent to HIBP (k-anonymity)
+- All audit data stays local. Nothing is uploaded to TrinTech or third parties by default
+- Network scans target only the specified IP
+- APIs are read-only
 
 ---
 
@@ -233,14 +253,16 @@ export HIBP_API_KEY="your-key"
 
 ```
 fortifyone/
-├── main.py              # Branded orchestrator
-├── requirements.txt     # Python dependencies
+├── main.py              # Branded orchestrator (v4.1 Hardened)
+├── requirements.txt     # Pinned dependencies
+├── .gitignore           # Protects data/, output/, secrets
 ├── LICENSE              # MIT License
 ├── README.md            # This file
 ├── config/
 │   └── schema.json      # Universal data contract
 ├── modules/
-│   ├── external_scan.py # ReconVision
+│   ├── external_scan.py # ReconVision (hardened)
+│   ├── shodan_scan.py   # Shodan enrichment
 │   ├── policy_engine.py # PolicyEngine
 │   ├── breach_vault.py  # BreachVault
 │   ├── saas_sentinel.py # SaaS-Sentinel
@@ -269,10 +291,10 @@ fortifyone/
 # Run tests
 python3 modules/breach_vault.py    # Test BreachVault standalone
 python3 modules/external_scan.py   # Test ReconVision standalone
+python3 modules/shodan_scan.py     # Test Shodan (needs API key)
 
-# Add new module
-cp modules/_template.py modules/your_module.py
-# Then register in main.py
+# Verify
+python3 main.py info
 ```
 
 ---
@@ -304,7 +326,6 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-*Built with purpose. Deployed with confidence.*
+*Built with purpose. Deployed with confidence. Hardened for production use.*
 
 **TrinTech Digital Defense — "Securing Your Digital World"**
-```
