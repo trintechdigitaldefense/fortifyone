@@ -3,10 +3,20 @@
     "client_name": "",
     "domain": "",
     "public_ip": "",
+    "industry": "General",
     "auditor": "TrinTech Digital Defense",
     "date": "",
+    "framework_version": "4.2.0",
     "compliance_frameworks": ["NIST_CSF", "CIS_v8", "HIPAA"],
-    "version": "1.0.0"
+    "version": "1.1.0"
+  },
+  "scope": {
+    "in_scope_targets": [],
+    "out_of_scope": [],
+    "roe_text": "Authorized security assessment only. No denial-of-service, no social engineering of staff without explicit written approval, no data exfiltration.",
+    "authorized_by": "",
+    "authorization_date": "",
+    "notes": ""
   },
   "external_scan": {
     "open_ports": [],
@@ -14,33 +24,49 @@
     "vulnerabilities": [],
     "supply_chain_findings": [],
     "risk_score": 0,
-    "scan_timestamp": ""
+    "scan_timestamp": "",
+    "shodan_data": {}
+  },
+  "internal_scan": {
+    "target_cidr": "",
+    "hosts_discovered": 0,
+    "hosts": [],
+    "open_ports": [],
+    "findings": [],
+    "risk_score": 0,
+    "scan_timestamp": "",
+    "note": ""
   },
   "saas_posture": {
-    "mfa_status": {
-      "enforced_users": 0,
-      "total_users": 0,
-      "non_compliant_accounts": []
-    },
-    "oauth_apps": [],
-    "public_sharing_findings": [],
-    "score_grade": "N/A"
+    "score_grade": "N/A",
+    "score": 0,
+    "checks": {},
+    "findings": [],
+    "scan_timestamp": ""
   },
   "policy_compliance": {
     "responses": [],
     "overall_compliance_percentage": 0,
-    "framework_gaps": {}
+    "total_controls": 0,
+    "compliant_controls": 0,
+    "critical_gaps": [],
+    "framework_gaps": {},
+    "industry": "",
+    "timestamp": "",
+    "notes": ""
+  },
+  "breach_exposure": {
+    "compromised_credentials": 0,
+    "reused_passwords": 0,
+    "findings": [],
+    "risk_level": "unknown",
+    "scan_timestamp": ""
   },
   "phishing_results": {
     "emails_sent": 0,
     "clicks": 0,
     "reporters": 0,
     "risk_profile": "Not Assessed"
-  },
-  "breach_exposure": {
-    "compromised_credentials": 0,
-    "reused_passwords": 0,
-    "findings": []
   },
   "final_report": {
     "executive_summary": "",
