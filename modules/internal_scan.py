@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-InternalScan - Basic Internal Network Discovery
+InternalScan - Basic Internal Network Discovery (v4.3)
 TrinTech Digital Defense
 
 Designed to be run FROM INSIDE the client network (on-site or VPN).
@@ -12,44 +12,61 @@ import datetime
 import ipaddress
 import subprocess
 import socket
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 
 def get_local_network() -> str:
     """Best-effort guess of the local /24 network."""
     try:
-        # Create a UDP socket to determine local IP
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         local_ip = s.getsockname()[0]
         s.close()
-        # Assume /24 for simplicity (common on SMB networks)
         network = ipaddress.ip_network(f"{local_ip}/24", strict=False)
         return str(network)
     except Exception:
         return ""
 
 
+def pick_cidr_from_scope(audit_data: dict) -> Optional[str]:
+    """Prefer an explicit CIDR from scope.in_scope_targets."""
+    for t in audit_data.get("scope", {}).get("in_scope_targets", []) or []:
+        t = str(t).strip()
+        try:
+            net = ipaddress.ip_network(t, strict=False)
+            if net.num_addresses <= 1024:  # allow up to /22 for internal
+                return str(net)
+        except ValueError:
+            continue
+    return None
+
+
 def run_scan(audit_data: dict, target_cidr: str = None) -> dict:
     """
     Run basic internal discovery.
 
-    target_cidr: optional CIDR (e.g. 192.168.1.0/24). If None, tries to auto-detect.
+    Priority for target:
+    1. Explicit target_cidr argument
+    2. CIDR found in scope.in_scope_targets
+    3. Auto-detect local /24
     """
     print("\n[INTERNALSCAN] Starting internal network discovery...")
 
     if not target_cidr:
+        target_cidr = pick_cidr_from_scope(audit_data)
+    if not target_cidr:
         target_cidr = get_local_network()
-        if not target_cidr:
-            print("[INTERNALSCAN] Could not auto-detect local network. Skipping.")
-            audit_data["internal_scan"] = {
-                "hosts": [],
-                "open_ports": [],
-                "risk_score": 0,
-                "error": "Could not determine local network",
-                "scan_timestamp": datetime.datetime.now().isoformat(),
-            }
-            return audit_data
+
+    if not target_cidr:
+        print("[INTERNALSCAN] Could not determine target network. Skipping.")
+        audit_data["internal_scan"] = {
+            "hosts": [],
+            "open_ports": [],
+            "risk_score": 0,
+            "error": "Could not determine local/target network",
+            "scan_timestamp": datetime.datetime.now().isoformat(),
+        }
+        return audit_data
 
     print(f"[INTERNALSCAN] Target range: {target_cidr}")
 
@@ -58,24 +75,24 @@ def run_scan(audit_data: dict, target_cidr: str = None) -> dict:
     open_ports = []
 
     try:
-        # Host discovery (ping scan)
         cmd_discover = ["nmap", "-sn", "-T4", "--max-retries", "1", target_cidr]
         res = subprocess.run(cmd_discover, capture_output=True, text=True, timeout=120)
 
         for line in res.stdout.splitlines():
             if "Nmap scan report for" in line:
-                # Extract IP
                 parts = line.split()
                 ip = parts[-1].strip("()")
-                if ipaddress.ip_address(ip):
+                try:
+                    ipaddress.ip_address(ip)
                     hosts.append({"ip": ip, "status": "up"})
+                except ValueError:
+                    pass
 
         print(f"[INTERNALSCAN] Discovered {len(hosts)} live hosts")
 
-        # Limited top-port scan on discovered hosts (cap at 15 hosts for safety)
-        targets = [h["ip"] for h in hosts[:15]]
+        # Cap at 20 hosts for safety on modest hardware
+        targets = [h["ip"] for h in hosts[:20]]
         if targets:
-            target_str = " ".join(targets)
             cmd_ports = [
                 "nmap", "-sS", "-T4", "--top-ports", "30",
                 "--open", "--max-retries", "1", "--host-timeout", "30s"
@@ -110,7 +127,6 @@ def run_scan(audit_data: dict, target_cidr: str = None) -> dict:
     except Exception as e:
         findings.append(f"[ERROR] {type(e).__name__}: {e}")
 
-    # Simple risk score
     critical = sum(1 for p in open_ports if p["risk_level"] == "critical")
     high = sum(1 for p in open_ports if p["risk_level"] == "high")
     risk_score = min(critical * 25 + high * 12 + len(open_ports) * 3, 100)
@@ -132,5 +148,5 @@ def run_scan(audit_data: dict, target_cidr: str = None) -> dict:
 
 if __name__ == "__main__":
     print("InternalScan standalone test")
-    test_data = {"audit_metadata": {}, "internal_scan": {}}
+    test_data = {"audit_metadata": {}, "internal_scan": {}, "scope": {"in_scope_targets": []}}
     run_scan(test_data)
