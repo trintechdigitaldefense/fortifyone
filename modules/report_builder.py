@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-ReportGenius - The Singularity Engine
-Generates all client deliverables from audit data.
-Memory-optimized with streaming writes to avoid loading entire HTML in RAM.
+ReportGenius - Client Deliverable Engine (v2)
+Generates professional HTML + CSV reports from audit data.
+TrinTech Digital Defense
 """
 
 import json
@@ -11,8 +11,6 @@ import datetime
 from pathlib import Path
 from jinja2 import Template
 
-# Minimal HTML template that creates the "Digital Twin" attack simulation
-# Uses D3.js loaded from CDN (no local storage for 5MB library)
 EXECUTIVE_REPORT_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -20,44 +18,57 @@ EXECUTIVE_REPORT_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FortifyOne Audit Report - {{ client_name }}</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; background: #0a0e27; color: #e0e6ed; }
-        .container { max-width: 900px; margin: 0 auto; }
-        .header { text-align: center; padding: 30px; background: linear-gradient(135deg, #1a1f3a, #0d1126); border-radius: 10px; margin-bottom: 30px; }
-        .header h1 { color: #00d4ff; margin: 0; }
-        .header .tagline { color: #8892b0; font-size: 0.9em; }
-        .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }
-        .metric-card { background: #1a1f3a; padding: 20px; border-radius: 8px; text-align: center; border-left: 4px solid #00d4ff; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; background: #0a0e27; color: #e0e6ed; line-height: 1.5; }
+        .container { max-width: 960px; margin: 0 auto; }
+        .header { text-align: center; padding: 28px; background: linear-gradient(135deg, #1a1f3a, #0d1126); border-radius: 12px; margin-bottom: 24px; border: 1px solid #2d3561; }
+        .header h1 { color: #00d4ff; margin: 0 0 8px 0; font-size: 1.8em; }
+        .header .tagline { color: #8892b0; font-size: 0.95em; }
+        .roe { background: #1a1f3a; border-left: 4px solid #ffa502; padding: 14px 18px; border-radius: 8px; margin-bottom: 24px; font-size: 0.9em; }
+        .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 28px; }
+        .metric-card { background: #1a1f3a; padding: 18px; border-radius: 10px; text-align: center; border-left: 4px solid #00d4ff; }
         .metric-card.critical { border-left-color: #ff4757; }
         .metric-card.warning { border-left-color: #ffa502; }
-        .metric-value { font-size: 2.5em; font-weight: bold; color: #00d4ff; }
-        .metric-label { color: #8892b0; font-size: 0.85em; margin-top: 5px; }
-        #simulation { background: #1a1f3a; border-radius: 10px; padding: 20px; min-height: 400px; margin-bottom: 30px; }
-        .finding { background: #1a1f3a; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #ff4757; }
+        .metric-value { font-size: 2.2em; font-weight: 700; color: #00d4ff; }
+        .metric-label { color: #8892b0; font-size: 0.82em; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+        h2 { color: #00d4ff; margin-top: 32px; border-bottom: 1px solid #2d3561; padding-bottom: 8px; }
+        .finding { background: #1a1f3a; padding: 16px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #ff4757; }
+        .finding.high { border-left-color: #ff6b6b; }
         .finding.medium { border-left-color: #ffa502; }
-        .finding h3 { margin: 0 0 5px 0; color: #fff; }
-        .finding p { margin: 0; color: #8892b0; font-size: 0.9em; }
-        .controls { text-align: center; margin: 20px 0; }
-        .btn { background: #00d4ff; color: #0a0e27; border: none; padding: 12px 25px; border-radius: 5px; font-size: 1em; cursor: pointer; font-weight: bold; }
-        .btn:hover { background: #00b8e6; }
+        .finding.low { border-left-color: #2ed573; }
+        .finding h3 { margin: 0 0 6px 0; color: #fff; font-size: 1.05em; }
+        .finding p { margin: 4px 0; color: #8892b0; font-size: 0.9em; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; font-weight: 600; text-transform: uppercase; }
+        .badge.critical { background: #ff4757; color: #fff; }
+        .badge.high { background: #ff6b6b; color: #fff; }
+        .badge.medium { background: #ffa502; color: #1a1f3a; }
+        .footer { text-align: center; color: #8892b0; margin-top: 48px; font-size: 0.8em; border-top: 1px solid #2d3561; padding-top: 16px; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🛡️ FortifyOne Audit Report</h1>
-            <p class="tagline">{{ client_name }} | {{ date }} | TrinityTech Digital Defense</p>
+            <h1>🛡️ FortifyOne Security Audit Report</h1>
+            <p class="tagline">{{ client_name }} &nbsp;|&nbsp; {{ date }} &nbsp;|&nbsp; TrinTech Digital Defense</p>
+            <p class="tagline">Framework v{{ version }}</p>
         </div>
-        
+
+        {% if roe_text %}
+        <div class="roe">
+            <strong>Rules of Engagement / Scope</strong><br>
+            {{ roe_text }}
+            {% if authorized_by %}<br><em>Authorized by: {{ authorized_by }}</em>{% endif %}
+        </div>
+        {% endif %}
+
         <div class="metric-grid">
-            <div class="metric-card {% if risk_score > 70 %}critical{% elif risk_score > 40 %}warning{% endif %}">
-                <div class="metric-value">{{ risk_score }}%</div>
-                <div class="metric-label">Overall Risk Score</div>
+            <div class="metric-card {% if overall_risk > 70 %}critical{% elif overall_risk > 40 %}warning{% endif %}">
+                <div class="metric-value">{{ overall_risk }}</div>
+                <div class="metric-label">Overall Risk</div>
             </div>
             <div class="metric-card">
-                <div class="metric-value">{{ open_ports }}</div>
-                <div class="metric-label">Exposed Services</div>
+                <div class="metric-value">{{ external_ports }}</div>
+                <div class="metric-label">External Ports</div>
             </div>
             <div class="metric-card">
                 <div class="metric-value">{{ compliance }}%</div>
@@ -65,226 +76,145 @@ EXECUTIVE_REPORT_TEMPLATE = """
             </div>
             <div class="metric-card">
                 <div class="metric-value">{{ breach_count }}</div>
-                <div class="metric-label">Credential Exposures</div>
+                <div class="metric-label">Credential Hits</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">{{ internal_hosts }}</div>
+                <div class="metric-label">Internal Hosts</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">{{ saas_grade }}</div>
+                <div class="metric-label">SaaS Grade</div>
             </div>
         </div>
-        
-        <div id="simulation">
-            <h2 style="color: #00d4ff; margin-top: 0;">🔴 Attack Path Simulation</h2>
-            <div id="viz"></div>
-            <div class="controls">
-                <button class="btn" onclick="animateAttack()">▶ Simulate Breach</button>
-                <p id="impact-estimate" style="color: #ff4757; margin-top: 15px; display: none;"></p>
+
+        <h2>Critical & High Findings</h2>
+        {% if findings %}
+            {% for finding in findings %}
+            <div class="finding {{ finding.severity }}">
+                <h3><span class="badge {{ finding.severity }}">{{ finding.severity }}</span> &nbsp; {{ finding.title }}</h3>
+                <p>{{ finding.description }}</p>
+                <p><strong>Remediation:</strong> {{ finding.remediation }}</p>
             </div>
-        </div>
-        
-        <h2 style="color: #ff4757;">Critical Findings</h2>
-        {% for finding in findings %}
-        <div class="finding {{ finding.severity }}">
-            <h3>{{ finding.title }}</h3>
-            <p>{{ finding.description }}</p>
-            <p><strong>Remediation:</strong> {{ finding.remediation }}</p>
+            {% endfor %}
+        {% else %}
+            <p style="color:#8892b0;">No critical external findings recorded in this assessment.</p>
+        {% endif %}
+
+        {% if policy_gaps %}
+        <h2>Policy & Compliance Gaps</h2>
+        {% for gap in policy_gaps %}
+        <div class="finding high">
+            <h3>{{ gap.question_id }} — {{ gap.question }}</h3>
+            <p><strong>Remediation:</strong> {{ gap.remediation }}</p>
         </div>
         {% endfor %}
-        
-        <p style="text-align: center; color: #8892b0; margin-top: 40px; font-size: 0.8em;">
-            Generated by FortifyOne | TrinTech Digital Defense | {{ generation_date }}
-        </p>
+        {% endif %}
+
+        <div class="footer">
+            Generated by FortifyOne | TrinTech Digital Defense | {{ generation_date }}<br>
+            This report is confidential and intended solely for the named client. Unauthorized distribution is prohibited.<br>
+            Authorized use only. Assessments performed under agreed Rules of Engagement.
+        </div>
     </div>
-    
-    <script>
-        // D3.js visualization of the attack path
-        const width = document.getElementById('viz').clientWidth;
-        const height = 350;
-        
-        const svg = d3.select('#viz')
-            .append('svg')
-            .attr('width', width)
-            .attr('height', height);
-        
-        // Define nodes: Internet -> Firewall -> Workstation -> Server
-        const nodes = [
-            {id: 'internet', label: '🌐 Internet (Attacker)', x: 100, y: 175},
-            {id: 'firewall', label: '🧱 Firewall', x: 300, y: 100},
-            {id: 'workstation', label: '💻 Reception PC', x: 500, y: 60},
-            {id: 'server', label: '🗄️ Patient Records Server', x: 700, y: 175}
-        ];
-        
-        const links = [
-            {source: 'internet', target: 'firewall', label: 'Port {{ open_port }} OPEN'},
-            {source: 'firewall', target: 'workstation', label: 'Phishing Email'},
-            {source: 'workstation', target: 'server', label: 'Lateral Movement'}
-        ];
-        
-        // Draw links
-        svg.selectAll('line')
-            .data(links)
-            .enter()
-            .append('line')
-            .attr('x1', d => nodes.find(n => n.id === d.source).x)
-            .attr('y1', d => nodes.find(n => n.id === d.source).y)
-            .attr('x2', d => nodes.find(n => n.id === d.target).x)
-            .attr('y2', d => nodes.find(n => n.id === d.target).y)
-            .attr('stroke', '#2d3561')
-            .attr('stroke-width', 3)
-            .attr('stroke-dasharray', '8,4');
-        
-        // Draw nodes
-        const nodeGroup = svg.selectAll('g')
-            .data(nodes)
-            .enter()
-            .append('g')
-            .attr('transform', d => `translate(${d.x},${d.y})`);
-        
-        nodeGroup.append('circle')
-            .attr('r', 30)
-            .attr('fill', '#1a1f3a')
-            .attr('stroke', '#00d4ff')
-            .attr('stroke-width', 2);
-        
-        nodeGroup.append('text')
-            .attr('text-anchor', 'middle')
-            .attr('dy', 5)
-            .attr('fill', '#e0e6ed')
-            .text(d => d.id);
-        
-        nodeGroup.append('text')
-            .attr('text-anchor', 'middle')
-            .attr('dy', 50)
-            .attr('fill', '#8892b0')
-            .attr('font-size', '10px')
-            .text(d => d.label);
-        
-        // Animation function
-        function animateAttack() {
-            const linkLines = svg.selectAll('line');
-            let delay = 0;
-            
-            linkLines.each(function(d, i) {
-                const line = d3.select(this);
-                setTimeout(() => {
-                    line.attr('stroke', '#ff4757')
-                        .attr('stroke-width', 5)
-                        .attr('stroke-dasharray', '0')
-                        .transition()
-                        .duration(500)
-                        .attr('stroke', '#ff4757');
-                }, delay);
-                delay += 1000;
-            });
-            
-            setTimeout(() => {
-                document.getElementById('impact-estimate').style.display = 'block';
-                document.getElementById('impact-estimate').innerHTML = 
-                    '⚠ Estimated Impact: <strong>${{ estimated_loss }}</strong> in downtime and recovery costs over <strong>{{ downtime_days }}</strong> days';
-            }, delay);
-        }
-    </script>
 </body>
 </html>
 """
 
+
 def generate_executive_report(audit_data: dict, output_dir: str) -> str:
-    """Generate the interactive HTML executive report."""
-    
-    client_name = audit_data["audit_metadata"]["client_name"]
+    """Generate the professional HTML executive report."""
+    meta = audit_data.get("audit_metadata", {})
+    client_name = meta.get("client_name", "Client")
     external = audit_data.get("external_scan", {})
+    internal = audit_data.get("internal_scan", {})
     policy = audit_data.get("policy_compliance", {})
     breach = audit_data.get("breach_exposure", {})
-    
-    # Calculate metrics
-    risk_score = external.get("risk_score", 0)
-    open_ports = len(external.get("open_ports", []))
-    compliance = policy.get("overall_compliance_percentage", 0)
-    breach_count = breach.get("compromised_credentials", 0)
-    
-    # Find the most dangerous open port for the simulation
-    open_port = "3389"
-    if open_ports > 0:
-        open_port = external["open_ports"][0].get("port", "3389")
-    
-    # Build findings list
+    saas = audit_data.get("saas_posture", {})
+    scope = audit_data.get("scope", {})
+
+    # Composite risk (simple weighted)
+    ext_risk = external.get("risk_score", 0)
+    int_risk = internal.get("risk_score", 0)
+    pol_score = policy.get("overall_compliance_percentage", 100)
+    overall_risk = min(100, int(ext_risk * 0.45 + int_risk * 0.25 + (100 - pol_score) * 0.3))
+
     findings = []
     for port_info in external.get("open_ports", []):
+        risk = port_info.get("risk_level", "medium")
+        sev = "critical" if risk == "critical" else "high" if risk == "high" else "medium"
         findings.append({
-            "title": f"Port {port_info['port']} ({port_info['service']}) Exposed to Internet",
-            "description": f"Critical service visible to attackers. Risk level: {port_info.get('risk_level', 'unknown')}",
-            "remediation": f"Close port {port_info['port']} or restrict access to authorized IP addresses only.",
-            "severity": "critical" if port_info.get("risk_level") == "high" else "medium"
+            "title": f"Port {port_info.get('port')} ({port_info.get('service', 'unknown')}) exposed",
+            "description": f"Service visible from the internet. Risk level: {risk}.",
+            "remediation": f"Restrict or close port {port_info.get('port')}. Prefer VPN or IP allow-listing over public exposure.",
+            "severity": sev
         })
-    
-    # Render template
+
+    # Policy critical gaps
+    policy_gaps = []
+    for r in policy.get("responses", []):
+        if not r.get("compliant") and r.get("critical"):
+            policy_gaps.append(r)
+
     template = Template(EXECUTIVE_REPORT_TEMPLATE)
     html_content = template.render(
         client_name=client_name,
-        date=audit_data["audit_metadata"]["date"],
-        risk_score=risk_score,
-        open_ports=open_ports,
-        compliance=compliance,
-        breach_count=breach_count,
-        open_port=open_port,
-        estimated_loss=f"${risk_score * 1500:,}",
-        downtime_days=max(1, risk_score // 10),
-        findings=findings,
-        generation_date=datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        date=meta.get("date", "")[:10],
+        version=meta.get("framework_version", "4.2"),
+        overall_risk=overall_risk,
+        external_ports=len(external.get("open_ports", [])),
+        compliance=round(policy.get("overall_compliance_percentage", 0)),
+        breach_count=breach.get("compromised_credentials", 0),
+        internal_hosts=internal.get("hosts_discovered", 0),
+        saas_grade=saas.get("score_grade", "N/A"),
+        findings=findings[:15],
+        policy_gaps=policy_gaps[:10],
+        roe_text=scope.get("roe_text", ""),
+        authorized_by=scope.get("authorized_by", ""),
+        generation_date=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
     )
-    
-    # Write to file
-    filename = f"{client_name.replace(' ', '_')}_Executive_Report.html"
+
+    safe_name = client_name.replace(" ", "_")
+    filename = f"{safe_name}_Executive_Report.html"
     filepath = os.path.join(output_dir, filename)
-    
-    with open(filepath, 'w') as f:
+    with open(filepath, "w", encoding="utf-8") as f:
         f.write(html_content)
-    
     return filepath
+
 
 def generate_remediation_plan(audit_data: dict, output_dir: str) -> str:
-    """Generate remediation plan as CSV for easy import into project management tools."""
-    
-    client_name = audit_data["audit_metadata"]["client_name"]
+    """Generate prioritized CSV remediation plan."""
+    meta = audit_data.get("audit_metadata", {})
+    client_name = meta.get("client_name", "Client")
     external = audit_data.get("external_scan", {})
-    
-    filename = f"{client_name.replace(' ', '_')}_Remediation_Plan.csv"
+    policy = audit_data.get("policy_compliance", {})
+    internal = audit_data.get("internal_scan", {})
+
+    safe_name = client_name.replace(" ", "_")
+    filename = f"{safe_name}_Remediation_Plan.csv"
     filepath = os.path.join(output_dir, filename)
-    
-    with open(filepath, 'w') as f:
-        f.write("Priority,Finding,Category,Risk Score,Estimated Effort,Status\n")
-        
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write("Priority,Finding,Category,Severity,Estimated Effort,Status,Remediation\n")
         priority = 1
+
         for port in external.get("open_ports", []):
-            f.write(f"{priority},Close port {port['port']} ({port['service']}),Network Security,{port.get('risk_level', 'medium')},2 hours,Not Started\n")
+            sev = port.get("risk_level", "medium").capitalize()
+            f.write(f'{priority},"Close or restrict port {port.get("port")} ({port.get("service")})",Network,{sev},2-4 hours,Not Started,"Firewall rule or service hardening"\n')
             priority += 1
-        
-        # Add policy-based remediations
-        f.write(f"{priority},Implement Multi-Factor Authentication for all users,Access Control,Critical,8 hours,Not Started\n")
-    
+
+        for port in internal.get("open_ports", [])[:10]:
+            sev = port.get("risk_level", "medium").capitalize()
+            f.write(f'{priority},"Internal host {port.get("ip")}:{port.get("port")} ({port.get("service")})",Internal Network,{sev},1-3 hours,Not Started,"Segment or harden internal service"\n')
+            priority += 1
+
+        for r in policy.get("responses", []):
+            if not r.get("compliant") and r.get("critical"):
+                f.write(f'{priority},"{r.get("question_id")}: {r.get("question")[:80]}",Policy,Critical,4-16 hours,Not Started,"{r.get("remediation", "Implement control")}"\n')
+                priority += 1
+
     return filepath
 
+
 if __name__ == "__main__":
-    test_data = {
-        "audit_metadata": {
-            "client_name": "Test Medical Practice",
-            "date": "2024-01-15",
-            "domain": "testmed.com"
-        },
-        "external_scan": {
-            "open_ports": [
-                {"port": "3389", "service": "ms-wbt-server", "risk_level": "high"},
-                {"port": "445", "service": "microsoft-ds", "risk_level": "high"},
-                {"port": "22", "service": "ssh", "risk_level": "medium"}
-            ],
-            "risk_score": 85
-        },
-        "policy_compliance": {
-            "overall_compliance_percentage": 45
-        },
-        "breach_exposure": {
-            "compromised_credentials": 7
-        }
-    }
-    
-    output_dir = "/tmp/fortifyone_test"
-    os.makedirs(output_dir, exist_ok=True)
-    
-    report_path = generate_executive_report(test_data, output_dir)
-    print(f"Report generated: {report_path}")
+    print("ReportGenius ready")
