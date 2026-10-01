@@ -6,9 +6,9 @@
     "industry": "General",
     "auditor": "TrinTech Digital Defense",
     "date": "",
-    "framework_version": "4.2.0",
+    "framework_version": "4.3.0",
     "compliance_frameworks": ["NIST_CSF", "CIS_v8", "HIPAA"],
-    "version": "1.1.0"
+    "version": "1.2.0"
   },
   "scope": {
     "in_scope_targets": [],
@@ -24,6 +24,9 @@
     "vulnerabilities": [],
     "supply_chain_findings": [],
     "risk_score": 0,
+    "targets_scanned": [],
+    "targets_count": 0,
+    "errors": 0,
     "scan_timestamp": "",
     "shodan_data": {}
   },
