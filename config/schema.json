@@ -6,9 +6,9 @@
     "industry": "General",
     "auditor": "TrinTech Digital Defense",
     "date": "",
-    "framework_version": "4.5.0",
+    "framework_version": "5.0.0",
     "compliance_frameworks": ["NIST_CSF", "CIS_v8", "HIPAA"],
-    "version": "1.3.0"
+    "version": "2.0.0"
   },
   "scope": {
     "in_scope_targets": [],
@@ -22,7 +22,6 @@
     "open_ports": [],
     "services": [],
     "vulnerabilities": [],
-    "supply_chain_findings": [],
     "risk_score": 0,
     "targets_scanned": [],
     "targets_count": 0,
@@ -44,6 +43,21 @@
     "findings": [],
     "script_hits": 0,
     "targets_probed": 0,
+    "risk_score": 0,
+    "scan_timestamp": "",
+    "note": ""
+  },
+  "web_probe": {
+    "cms": null,
+    "findings": [],
+    "paths_checked": 0,
+    "risk_score": 0,
+    "scan_timestamp": "",
+    "note": ""
+  },
+  "local_hardening": {
+    "host_info": {},
+    "findings": [],
     "risk_score": 0,
     "scan_timestamp": "",
     "note": ""
