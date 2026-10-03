@@ -211,3 +211,64 @@ def crypto_status() -> dict:
         "encryption_available": HAS_CRYPTO and bool(_get_passphrase()),
         "signing_available": bool(_get_passphrase()),
     }
+
+
+# ---------------------------------------------------------------------------
+# Better secret handling helpers (v5.4)
+# ---------------------------------------------------------------------------
+
+def store_secret_file(path: Union[str, Path], secret: str, mode: int = 0o600) -> Path:
+    """Write a secret to a file with restrictive permissions. Never log the value."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(secret.strip() + "\n", encoding="utf-8")
+    try:
+        os.chmod(path, mode)
+    except OSError:
+        pass
+    return path
+
+
+def load_secret_file(path: Union[str, Path]) -> Optional[str]:
+    """Load a secret from a file (e.g. FORTIFYONE_KEY_FILE)."""
+    path = Path(path)
+    if not path.is_file():
+        return None
+    try:
+        return path.read_text(encoding="utf-8").strip() or None
+    except OSError:
+        return None
+
+
+def try_keyring_get(service: str = "fortifyone", username: str = "passphrase") -> Optional[str]:
+    """Optional OS keyring support. Returns None if keyring is unavailable or empty."""
+    try:
+        import keyring  # type: ignore
+        val = keyring.get_password(service, username)
+        return val.strip() if val else None
+    except Exception:
+        return None
+
+
+def try_keyring_set(secret: str, service: str = "fortifyone", username: str = "passphrase") -> bool:
+    """Store passphrase in OS keyring if available."""
+    try:
+        import keyring  # type: ignore
+        keyring.set_password(service, username, secret)
+        return True
+    except Exception:
+        return False
+
+
+def resolve_passphrase(explicit: Optional[str] = None) -> Optional[str]:
+    """
+    Resolve passphrase from multiple sources (priority order):
+      1. Explicit argument
+      2. FORTIFYONE_PASSPHRASE env
+      3. FORTIFYONE_KEY_FILE
+      4. OS keyring (if keyring package installed)
+    """
+    pw = _get_passphrase(explicit)
+    if pw:
+        return pw
+    return try_keyring_get()

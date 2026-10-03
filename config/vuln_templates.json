@@ -1,102 +1,71 @@
 {
-  "version": "1.1",
-  "description": "Curated safe, non-exploitative vulnerability indicators for FortifyOne VulnProbe. Expanded in v5.3.",
+  "version": "1.2",
+  "description": "Curated safe, non-exploitative vulnerability indicators for FortifyOne VulnProbe. Expanded in v5.4 with additional exposure and misconfiguration checks.",
   "templates": [
     {
       "id": "SSL-HEARTBLEED",
       "title": "SSL Heartbleed indicator",
       "severity": "critical",
       "match_nse": ["heartbleed", "VULNERABLE"],
-      "remediation": "Upgrade OpenSSL to a patched version and rotate any exposed keys/certs."
+      "remediation": "Upgrade OpenSSL to a patched version and rotate any exposed keys/certs.",
+      "controls": ["PR.DS-2", "CIS-3.1"]
     },
     {
       "id": "SSL-POODLE",
       "title": "SSLv3 POODLE indicator",
       "severity": "high",
       "match_nse": ["poodle", "VULNERABLE"],
-      "remediation": "Disable SSLv3 on all services; prefer TLS 1.2+."
+      "remediation": "Disable SSLv3 on all services; prefer TLS 1.2+.",
+      "controls": ["PR.DS-2"]
     },
     {
       "id": "SSL-CCS",
       "title": "SSL CCS Injection indicator",
       "severity": "high",
       "match_nse": ["ccs-injection", "VULNERABLE"],
-      "remediation": "Patch OpenSSL / TLS stack; disable vulnerable cipher suites."
+      "remediation": "Patch OpenSSL / TLS stack; disable vulnerable cipher suites.",
+      "controls": ["PR.DS-2"]
     },
     {
       "id": "SMB-ETERNALBLUE",
       "title": "SMB MS17-010 (EternalBlue) indicator",
       "severity": "critical",
       "match_nse": ["ms17-010", "VULNERABLE"],
-      "remediation": "Apply MS17-010 patches; block SMB from the internet; disable SMBv1."
+      "remediation": "Apply MS17-010 patches; block SMB from the internet; disable SMBv1.",
+      "controls": ["PR.IP-1", "CIS-7.1"]
     },
     {
       "id": "SMB-MS08-067",
       "title": "SMB MS08-067 indicator",
       "severity": "critical",
       "match_nse": ["ms08-067", "VULNERABLE"],
-      "remediation": "Patch legacy Windows systems; isolate or retire unsupported hosts."
+      "remediation": "Patch legacy Windows systems; isolate or retire unsupported hosts.",
+      "controls": ["PR.IP-1"]
     },
     {
       "id": "FTP-ANON",
       "title": "Anonymous FTP enabled",
       "severity": "high",
       "match_nse": ["anonymous", "ftp"],
-      "remediation": "Disable anonymous FTP; prefer SFTP with authentication."
+      "remediation": "Disable anonymous FTP; prefer SFTP with authentication.",
+      "controls": ["PR.AC-3", "CIS-5.1"]
     },
     {
       "id": "SSH-V1",
       "title": "SSHv1 protocol supported",
       "severity": "high",
-      "match_nse": ["sshv1", "SSHv1"],
-      "remediation": "Disable SSHv1; require SSH protocol 2 only."
-    },
-    {
-      "id": "EXPOSE-RDP",
-      "title": "RDP exposed",
-      "severity": "critical",
-      "match_port": ["3389"],
-      "match_service": ["ms-wbt-server", "rdp"],
-      "remediation": "Remove public RDP; use VPN or zero-trust access with NLA and MFA."
-    },
-    {
-      "id": "EXPOSE-SMB",
-      "title": "SMB exposed publicly",
-      "severity": "critical",
-      "match_port": ["445", "139"],
-      "match_service": ["microsoft-ds", "netbios"],
-      "remediation": "Block SMB at the perimeter; never expose file shares to the internet."
-    },
-    {
-      "id": "EXPOSE-TELNET",
-      "title": "Telnet service exposed",
-      "severity": "critical",
-      "match_port": ["23"],
-      "match_service": ["telnet"],
-      "remediation": "Disable Telnet; replace with SSH."
-    },
-    {
-      "id": "EXPOSE-DB",
-      "title": "Database port exposed",
-      "severity": "critical",
-      "match_port": ["3306", "5432", "1433", "27017", "6379", "1521"],
-      "remediation": "Bind databases to localhost/private network; require VPN or bastion access."
-    },
-    {
-      "id": "EXPOSE-VNC",
-      "title": "VNC exposed",
-      "severity": "high",
-      "match_port": ["5900", "5901", "5902"],
-      "match_service": ["vnc"],
-      "remediation": "Do not expose VNC publicly; tunnel over VPN/SSH."
+      "match_nse": ["sshv1"],
+      "remediation": "Disable SSH protocol 1; allow only SSH-2.",
+      "controls": ["PR.AC-3"]
     },
     {
       "id": "EXPOSE-REDIS",
-      "title": "Redis exposed",
+      "title": "Redis exposed without authentication",
       "severity": "critical",
       "match_port": ["6379"],
       "match_service": ["redis"],
-      "remediation": "Bind Redis to localhost; require AUTH; never expose to the internet."
+      "remediation": "Bind Redis to localhost or private network; require AUTH; never expose to the internet.",
+      "controls": ["PR.AC-3", "CIS-5.2"]
     },
     {
       "id": "EXPOSE-MONGODB",
@@ -104,35 +73,80 @@
       "severity": "critical",
       "match_port": ["27017"],
       "match_service": ["mongodb"],
-      "remediation": "Enable authentication; bind to private interfaces only."
+      "remediation": "Require authentication; bind to private interfaces only; firewall from public internet.",
+      "controls": ["PR.AC-3", "CIS-5.2"]
     },
     {
       "id": "EXPOSE-ELASTIC",
       "title": "Elasticsearch / OpenSearch exposed",
       "severity": "critical",
       "match_port": ["9200", "9300"],
-      "remediation": "Require authentication; place behind VPN or reverse proxy with access control."
-    },
-    {
-      "id": "HTTP-SLOWLORIS",
-      "title": "HTTP Slowloris susceptibility indicator",
-      "severity": "medium",
-      "match_nse": ["slowloris"],
-      "remediation": "Tune web server timeouts and request limits; place behind a reverse proxy/WAF."
+      "match_service": ["elasticsearch", "opensearch"],
+      "remediation": "Enable authentication; restrict network access; never expose publicly without strong controls.",
+      "controls": ["PR.AC-3"]
     },
     {
       "id": "EXPOSE-DOCKER",
-      "title": "Docker API potentially exposed",
+      "title": "Docker API / daemon exposed",
       "severity": "critical",
       "match_port": ["2375", "2376"],
-      "remediation": "Never expose the Docker daemon API to the network without TLS + auth."
+      "match_service": ["docker"],
+      "remediation": "Never expose Docker API to the internet. Use TLS + auth or local socket only.",
+      "controls": ["PR.AC-3", "CIS-5.2"]
     },
     {
-      "id": "EXPOSE-K8S",
-      "title": "Kubernetes API / etcd exposure indicator",
+      "id": "EXPOSE-K8S-API",
+      "title": "Kubernetes API server exposed",
       "severity": "critical",
-      "match_port": ["6443", "10250", "2379"],
-      "remediation": "Restrict Kubernetes control-plane and etcd ports to authorized networks only."
+      "match_port": ["6443", "10250"],
+      "match_service": ["kubernetes"],
+      "remediation": "Restrict Kubernetes API access; use RBAC, network policies, and private endpoints.",
+      "controls": ["PR.AC-3", "PR.AC-4"]
+    },
+    {
+      "id": "EXPOSE-MYSQL",
+      "title": "MySQL / MariaDB exposed",
+      "severity": "high",
+      "match_port": ["3306"],
+      "match_service": ["mysql", "mariadb"],
+      "remediation": "Bind to localhost or private network; require strong authentication; firewall public access.",
+      "controls": ["PR.AC-3", "CIS-5.2"]
+    },
+    {
+      "id": "EXPOSE-POSTGRES",
+      "title": "PostgreSQL exposed",
+      "severity": "high",
+      "match_port": ["5432"],
+      "match_service": ["postgresql"],
+      "remediation": "Restrict to private networks; require auth + TLS; never expose publicly.",
+      "controls": ["PR.AC-3"]
+    },
+    {
+      "id": "EXPOSE-MSSQL",
+      "title": "Microsoft SQL Server exposed",
+      "severity": "high",
+      "match_port": ["1433"],
+      "match_service": ["ms-sql", "mssql"],
+      "remediation": "Firewall SQL Server; require strong authentication; prefer private connectivity.",
+      "controls": ["PR.AC-3"]
+    },
+    {
+      "id": "EXPOSE-RDP",
+      "title": "RDP exposed to network",
+      "severity": "high",
+      "match_port": ["3389"],
+      "match_service": ["ms-wbt-server", "rdp"],
+      "remediation": "Do not expose RDP to the internet. Use VPN or jump host + MFA + NLA.",
+      "controls": ["PR.AC-3", "CIS-5.1"]
+    },
+    {
+      "id": "EXPOSE-VNC",
+      "title": "VNC exposed",
+      "severity": "high",
+      "match_port": ["5900", "5901"],
+      "match_service": ["vnc"],
+      "remediation": "Disable or firewall VNC; prefer modern remote access with MFA.",
+      "controls": ["PR.AC-3"]
     },
     {
       "id": "EXPOSE-LDAP",
@@ -140,15 +154,147 @@
       "severity": "high",
       "match_port": ["389", "636"],
       "match_service": ["ldap", "ldaps"],
-      "remediation": "Do not expose directory services to the public internet; require VPN + strong auth."
+      "remediation": "Do not expose directory services to the public internet; require VPN + strong auth.",
+      "controls": ["PR.AC-3"]
     },
     {
       "id": "EXPOSE-SMTP-OPEN",
-      "title": "SMTP service on non-standard or high-risk exposure",
+      "title": "SMTP service on high-risk exposure",
       "severity": "medium",
       "match_port": ["25", "465", "587"],
       "match_service": ["smtp"],
-      "remediation": "Ensure SMTP is not an open relay; enforce authentication and TLS."
+      "remediation": "Ensure SMTP is not an open relay; enforce authentication and TLS.",
+      "controls": ["PR.DS-2"]
+    },
+    {
+      "id": "EXPOSE-TELNET",
+      "title": "Telnet service detected",
+      "severity": "critical",
+      "match_port": ["23"],
+      "match_service": ["telnet"],
+      "remediation": "Disable Telnet immediately; use SSH instead.",
+      "controls": ["PR.AC-3", "CIS-5.1"]
+    },
+    {
+      "id": "EXPOSE-NFS",
+      "title": "NFS export potentially exposed",
+      "severity": "high",
+      "match_port": ["2049"],
+      "match_service": ["nfs"],
+      "remediation": "Restrict NFS to trusted networks; use strong export controls and authentication.",
+      "controls": ["PR.AC-3"]
+    },
+    {
+      "id": "EXPOSE-MEMCACHED",
+      "title": "Memcached exposed",
+      "severity": "high",
+      "match_port": ["11211"],
+      "match_service": ["memcached"],
+      "remediation": "Bind Memcached to localhost; never expose to the internet (amplification risk).",
+      "controls": ["PR.AC-3"]
+    },
+    {
+      "id": "EXPOSE-COUCHDB",
+      "title": "CouchDB exposed",
+      "severity": "high",
+      "match_port": ["5984"],
+      "match_service": ["couchdb"],
+      "remediation": "Require authentication; restrict network access.",
+      "controls": ["PR.AC-3"]
+    },
+    {
+      "id": "EXPOSE-RABBITMQ",
+      "title": "RabbitMQ management / AMQP exposed",
+      "severity": "high",
+      "match_port": ["5672", "15672"],
+      "match_service": ["amqp", "rabbitmq"],
+      "remediation": "Restrict management UI and AMQP ports to private networks; enforce auth.",
+      "controls": ["PR.AC-3"]
+    },
+    {
+      "id": "EXPOSE-KIBANA",
+      "title": "Kibana / similar dashboard exposed",
+      "severity": "high",
+      "match_port": ["5601"],
+      "match_service": ["kibana"],
+      "remediation": "Require authentication; place behind reverse proxy with strong access controls.",
+      "controls": ["PR.AC-3"]
+    },
+    {
+      "id": "EXPOSE-JENKINS",
+      "title": "Jenkins CI exposed",
+      "severity": "high",
+      "match_port": ["8080"],
+      "match_service": ["jenkins"],
+      "remediation": "Never expose Jenkins to the public internet without authentication, authorization, and network controls.",
+      "controls": ["PR.AC-3", "PR.AC-4"]
+    },
+    {
+      "id": "EXPOSE-PORTAINER",
+      "title": "Portainer / container UI exposed",
+      "severity": "critical",
+      "match_port": ["9000", "9443"],
+      "match_service": ["portainer"],
+      "remediation": "Restrict Portainer to trusted networks only; enforce strong authentication.",
+      "controls": ["PR.AC-3"]
+    },
+    {
+      "id": "WEB-DIRLIST",
+      "title": "Directory listing enabled indicator",
+      "severity": "medium",
+      "match_nse": ["http-enum", "directory listing"],
+      "remediation": "Disable directory listing on web servers.",
+      "controls": ["PR.DS-5", "CIS-9.1"]
+    },
+    {
+      "id": "WEB-TRACE",
+      "title": "HTTP TRACE method enabled",
+      "severity": "medium",
+      "match_nse": ["http-trace", "TRACE"],
+      "remediation": "Disable the TRACE method on web servers.",
+      "controls": ["PR.DS-5"]
+    },
+    {
+      "id": "SSL-WEAK-CIPHER",
+      "title": "Weak SSL/TLS cipher suites indicated",
+      "severity": "high",
+      "match_nse": ["ssl-enum-ciphers", "weak", "NULL", "EXPORT", "RC4"],
+      "remediation": "Disable weak, NULL, EXPORT, and RC4 ciphers; prefer modern AEAD suites.",
+      "controls": ["PR.DS-2"]
+    },
+    {
+      "id": "EXPOSE-SNMP",
+      "title": "SNMP service exposed",
+      "severity": "medium",
+      "match_port": ["161"],
+      "match_service": ["snmp"],
+      "remediation": "Restrict SNMP to management networks; use SNMPv3 with auth+priv; avoid public community strings.",
+      "controls": ["PR.AC-3"]
+    },
+    {
+      "id": "EXPOSE-IPMI",
+      "title": "IPMI / BMC management interface exposed",
+      "severity": "critical",
+      "match_port": ["623"],
+      "match_service": ["ipmi", "asf-rmcp"],
+      "remediation": "Never expose IPMI/BMC to untrusted networks. Place on isolated management VLAN with strong auth.",
+      "controls": ["PR.AC-3", "PR.AC-4"]
+    },
+    {
+      "id": "EXPOSE-GIT",
+      "title": "Git repository exposure indicator",
+      "severity": "high",
+      "match_nse": ["http-git", ".git"],
+      "remediation": "Block public access to .git directories; never deploy repositories with history to web roots.",
+      "controls": ["PR.DS-5"]
+    },
+    {
+      "id": "EXPOSE-ENV",
+      "title": "Environment / config file exposure indicator",
+      "severity": "critical",
+      "match_nse": [".env", "config.php", "web.config"],
+      "remediation": "Ensure .env, config, and credential files are never web-accessible.",
+      "controls": ["PR.DS-5", "PR.AC-1"]
     }
   ]
 }

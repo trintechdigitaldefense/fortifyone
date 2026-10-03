@@ -6,9 +6,9 @@
     "industry": "General",
     "auditor": "TrinTech Digital Defense",
     "date": "",
-    "framework_version": "5.3.0",
-    "compliance_frameworks": ["NIST_CSF", "CIS_v8", "HIPAA"],
-    "version": "2.2.0"
+    "framework_version": "5.4.0",
+    "compliance_frameworks": ["NIST_CSF", "CIS_v8", "HIPAA", "ISO27001", "PCI_DSS"],
+    "version": "2.3.0"
   },
   "scope": {
     "in_scope_targets": [],
@@ -41,13 +41,13 @@
   },
   "credentialed_scan": {
     "enabled": false,
-    "host": "",
-    "user": "",
-    "port": 22,
+    "hosts_scanned": [],
+    "hosts_count": 0,
     "checks_run": 0,
     "findings": [],
     "risk_score": 0,
     "winrm": {},
+    "winrm_all": [],
     "scan_timestamp": "",
     "note": ""
   },
@@ -64,6 +64,16 @@
     "cms": null,
     "findings": [],
     "paths_checked": 0,
+    "risk_score": 0,
+    "scan_timestamp": "",
+    "note": ""
+  },
+  "tls_posture": {
+    "host": null,
+    "findings": [],
+    "certificate": {},
+    "protocols": {},
+    "headers": {},
     "risk_score": 0,
     "scan_timestamp": "",
     "note": ""
@@ -89,6 +99,8 @@
     "compliant_controls": 0,
     "critical_gaps": [],
     "framework_gaps": {},
+    "control_evidence": {},
+    "evidence_links": [],
     "industry": "",
     "timestamp": "",
     "notes": ""
@@ -99,6 +111,16 @@
     "findings": [],
     "risk_level": "unknown",
     "scan_timestamp": ""
+  },
+  "plugins": {
+    "available": [],
+    "ran": {}
+  },
+  "watch": {
+    "key": "",
+    "current": {},
+    "delta": {},
+    "timestamp": ""
   },
   "phishing_results": {
     "emails_sent": 0,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FortifyOne v5.3 (Professional) - TrinTech Digital Defense. AUTHORIZED USE ONLY."""
+"""FortifyOne v5.4 (Professional) - TrinTech Digital Defense. AUTHORIZED USE ONLY."""
 import json, os, sys, socket, datetime, ipaddress, re
 from pathlib import Path
 from typing import Optional, List
@@ -11,7 +11,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich import box
 
 BRAND = {"name": "TrinTech Digital Defense", "tagline": "Securing Your Digital World",
-         "url": "https://trintechdigitaldefense.github.io", "version": "5.3.0", "build": "Professional"}
+         "url": "https://trintechdigitaldefense.github.io", "version": "5.4.0", "build": "Professional"}
 NOTICE = "[bold red]⚠ AUTHORIZED USE ONLY[/bold red]\nAuthorized assessments only. Unauthorized scanning is illegal."
 console = Console()
 app = typer.Typer(help=f"FortifyOne v{BRAND['version']}")
@@ -181,7 +181,7 @@ def list_cmd():
 
 @app.command()
 def run(module: str = typer.Option("all", "--module", "-m",
-            help="all, external, vuln, web, internal, local, credentialed, policy, breach, saas"),
+            help="all, external, vuln, web, tls, internal, local, credentialed, policy, breach, saas, plugins"),
         audit_file: str = typer.Option(..., "--file", "-f"),
         passphrase: str = typer.Option(None, "--passphrase", "-p")):
     """Run audit modules."""
@@ -189,6 +189,9 @@ def run(module: str = typer.Option("all", "--module", "-m",
     audit = load_audit(audit_file, passphrase=passphrase)
     client = audit["audit_metadata"]["client_name"]
     console.print(f"[bold]Target:[/bold] {client}\n")
+    mods = {m.strip().lower() for m in module.split(",")}
+    def want(*names):
+        return "all" in mods or any(n in mods for n in names)
     results = {}
     def go(name, key, importer):
         task = progress.add_task(f"[cyan]{name}...", total=None)
@@ -200,37 +203,43 @@ def run(module: str = typer.Option("all", "--module", "-m",
         except Exception as e:
             progress.update(task, description=f"[yellow]⚠ {name}: {e}[/yellow]")
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
-        if module in ("all", "external"):
+        if want("external"):
             go("ReconVision", "External", lambda: __import__("external_scan", fromlist=["run_scan"]).run_scan)
             try:
                 from shodan_scan import run_scan as s; audit = s(audit)
             except Exception: pass
-        if module in ("all", "vuln", "external"):
+        if want("vuln", "external"):
             go("VulnProbe", "Vuln", lambda: __import__("vuln_probe", fromlist=["run_scan"]).run_scan)
-        if module in ("all", "web"):
+        if want("web"):
             go("WebProbe", "Web", lambda: __import__("web_probe", fromlist=["run_scan"]).run_scan)
-        if module in ("all", "internal"):
+        if want("tls", "web"):
+            go("TLSPosture", "TLS", lambda: __import__("tls_posture", fromlist=["run_scan"]).run_scan)
+        if want("internal"):
             go("InternalScan", "Internal", lambda: __import__("internal_scan", fromlist=["run_scan"]).run_scan)
-        if module in ("all", "local"):
+        if want("local"):
             go("LocalHardening", "Local", lambda: __import__("local_hardening", fromlist=["run_scan"]).run_scan)
-        if module in ("all", "credentialed"):
+        if want("credentialed"):
             go("Credentialed", "Credentialed", lambda: __import__("credentialed_scan", fromlist=["run_scan"]).run_scan)
-        if module in ("all", "policy"):
+        if want("policy"):
             go("PolicyEngine", "Policy", lambda: __import__("policy_engine", fromlist=["run_questionnaire"]).run_questionnaire)
-        if module in ("all", "breach"):
+        if want("breach"):
             go("BreachVault", "Breach", lambda: __import__("breach_vault", fromlist=["run_scan"]).run_scan)
-        if module in ("all", "saas"):
+        if want("saas"):
             go("SaaS-Sentinel", "SaaS", lambda: __import__("saas_sentinel", fromlist=["run_scan"]).run_scan)
+        if want("plugins"):
+            go("Plugins", "Plugins", lambda: __import__("plugin_loader", fromlist=["run_plugins"]).run_plugins)
     if "External" in results:
         results["External"] = f"{audit.get('external_scan',{}).get('targets_count',1)} targets, {len(audit.get('external_scan',{}).get('open_ports',[]))} ports"
     if "Vuln" in results: results["Vuln"] = f"{len(audit.get('vuln_probe',{}).get('findings',[]))} findings"
     if "Web" in results: results["Web"] = f"CMS={audit.get('web_probe',{}).get('cms') or 'n/a'}"
+    if "TLS" in results: results["TLS"] = f"{len(audit.get('tls_posture',{}).get('findings',[]))} findings, risk {audit.get('tls_posture',{}).get('risk_score',0)}"
     if "Internal" in results: results["Internal"] = f"{audit.get('internal_scan',{}).get('hosts_discovered',0)} hosts"
     if "Local" in results: results["Local"] = f"{len(audit.get('local_hardening',{}).get('findings',[]))} findings"
-    if "Credentialed" in results: results["Credentialed"] = f"{len(audit.get('credentialed_scan',{}).get('findings',[]))} findings"
+    if "Credentialed" in results: results["Credentialed"] = f"{audit.get('credentialed_scan',{}).get('hosts_count',0)} hosts, {len(audit.get('credentialed_scan',{}).get('findings',[]))} findings"
     if "Policy" in results: results["Policy"] = f"{audit.get('policy_compliance',{}).get('overall_compliance_percentage',0):.0f}%"
     if "Breach" in results: results["Breach"] = f"{audit.get('breach_exposure',{}).get('compromised_credentials',0)} hits"
     if "SaaS" in results: results["SaaS"] = audit.get("saas_posture",{}).get("score_grade","?")
+    if "Plugins" in results: results["Plugins"] = f"{len(audit.get('plugins',{}).get('ran',{}))} ran"
     updated = save_audit(audit, f"{client}_updated", passphrase=passphrase)
     console.print("\n[bold green]═══ Complete ═══[/bold green]")
     if results:
@@ -241,10 +250,15 @@ def run(module: str = typer.Option("all", "--module", "-m",
 
 @app.command()
 def report(audit_file: str = typer.Option(..., "--file", "-f"),
-           passphrase: str = typer.Option(None, "--passphrase", "-p")):
-    """HTML + multi-page PDF + engagement letter + CSV (auto-signed)."""
+           passphrase: str = typer.Option(None, "--passphrase", "-p"),
+           redacted: bool = typer.Option(False, "--redacted", help="Generate client-shareable redacted outputs")):
+    """HTML + multi-page PDF + engagement letter + CSV + interactive dashboard (auto-signed)."""
     header(); auth()
     audit = load_audit(audit_file, passphrase=passphrase)
+    if redacted:
+        from dashboard import redact_audit
+        audit = redact_audit(audit)
+        console.print("[dim]Redacted mode — internal IPs scrubbed[/dim]")
     client = audit["audit_metadata"]["client_name"]
     out = OUTPUT / sanitize_client_name(client).replace(" ", "_")
     out.mkdir(exist_ok=True)
@@ -259,6 +273,13 @@ def report(audit_file: str = typer.Option(..., "--file", "-f"),
         console.print(f"[green]✓[/green] PDF:  {Path(pdf).name}" if pdf else "[yellow]⚠ PDF: pip install fpdf2[/yellow]")
         if letter: console.print(f"[green]✓[/green] Letter: {Path(letter).name}")
         console.print(f"[green]✓[/green] CSV:  {Path(csvp).name}")
+        # Interactive dashboard
+        try:
+            from dashboard import generate_interactive_dashboard
+            dash = generate_interactive_dashboard(audit, str(out), redacted=redacted)
+            console.print(f"[green]✓[/green] Dashboard: {Path(dash).name}")
+        except Exception as de:
+            console.print(f"[yellow]⚠ Dashboard: {de}[/yellow]")
         summary = out / "audit_summary.json"
         if HAS_CRYPTO_UTILS: save_json_secure(summary, audit, passphrase=passphrase)
         else:
@@ -392,9 +413,65 @@ def info():
 def about():
     console.print(Panel.fit(
         f"[bold cyan]{BRAND['name']}[/bold cyan]\n{BRAND['tagline']}\n\nFortifyOne v{BRAND['version']} ({BRAND['build']})\n"
-        "Encrypted audits · Signed reports · Credentialed SSH + WinRM readiness\n"
-        "Branded PDF · Engagement letter · Evidence pack\n\n"
+        "Encrypted audits · Signed reports · Credentialed SSH/WinRM multi-host · TLS posture · Dashboard · Watch mode · Plugins\n"
+        "Branded PDF · Interactive dashboard · Engagement letter · Evidence pack · Redacted mode\n\n"
         f"{BRAND['url']}", title="About", border_style="cyan"))
+
+@app.command()
+def watch(audit_file: str = typer.Option(..., "--file", "-f"),
+          passphrase: str = typer.Option(None, "--passphrase", "-p")):
+    """Lightweight continuous external watch (external + TLS + web + delta)."""
+    header(); auth()
+    audit = load_audit(audit_file, passphrase=passphrase)
+    client = audit["audit_metadata"]["client_name"]
+    console.print(f"[bold]Watch target:[/bold] {client}\n")
+    # Run safe external subset
+    try:
+        from external_scan import run_scan as ext
+        audit = ext(audit)
+    except Exception as e:
+        console.print(f"[yellow]External: {e}[/yellow]")
+    try:
+        from tls_posture import run_scan as tls
+        audit = tls(audit)
+    except Exception as e:
+        console.print(f"[yellow]TLS: {e}[/yellow]")
+    try:
+        from web_probe import run_scan as web
+        audit = web(audit)
+    except Exception as e:
+        console.print(f"[yellow]Web: {e}[/yellow]")
+    from watch_mode import run_watch
+    audit = run_watch(audit, DATA)
+    delta = audit.get("watch", {}).get("delta", {})
+    console.print(f"[bold]Delta status:[/bold] {delta.get('status')} — {delta.get('message')}")
+    if delta.get("new_ports"):
+        console.print(f"[yellow]New ports:[/yellow] {', '.join(delta['new_ports'][:10])}")
+    if delta.get("closed_ports"):
+        console.print(f"[dim]Closed ports:[/dim] {', '.join(delta['closed_ports'][:10])}")
+    updated = save_audit(audit, f"{client}_watch", passphrase=passphrase)
+    console.print(f"[dim]{updated.name}[/dim]")
+
+
+@app.command("plugins")
+def plugins_cmd(list_only: bool = typer.Option(False, "--list", help="List available plugins only")):
+    """List or show plugin system status."""
+    header()
+    from plugin_loader import list_plugins, discover_plugins
+    plugs = list_plugins()
+    if not plugs:
+        console.print("[dim]No plugins found in modules/plugins/[/dim]")
+        console.print("Drop a .py file with PLUGIN_NAME and run(audit_data) to extend FortifyOne.")
+        return
+    t = Table(title="FortifyOne Plugins", box=box.ROUNDED)
+    t.add_column("Name", style="cyan")
+    t.add_column("Version")
+    t.add_column("Path", style="dim")
+    for p in plugs:
+        t.add_row(p["name"], p.get("version", ""), p.get("path", ""))
+    console.print(t)
+
+
 
 if __name__ == "__main__":
     app()
