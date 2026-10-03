@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FortifyOne v5.2 (Professional) - TrinTech Digital Defense. AUTHORIZED USE ONLY."""
+"""FortifyOne v5.3 (Professional) - TrinTech Digital Defense. AUTHORIZED USE ONLY."""
 import json, os, sys, socket, datetime, ipaddress, re
 from pathlib import Path
 from typing import Optional, List
@@ -11,7 +11,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich import box
 
 BRAND = {"name": "TrinTech Digital Defense", "tagline": "Securing Your Digital World",
-         "url": "https://trintechdigitaldefense.github.io", "version": "5.2.0", "build": "Professional"}
+         "url": "https://trintechdigitaldefense.github.io", "version": "5.3.0", "build": "Professional"}
 NOTICE = "[bold red]⚠ AUTHORIZED USE ONLY[/bold red]\nAuthorized assessments only. Unauthorized scanning is illegal."
 console = Console()
 app = typer.Typer(help=f"FortifyOne v{BRAND['version']}")
@@ -359,76 +359,41 @@ def quick(domain: str = typer.Option(None, "--domain", "-d"),
     try: tlist = parse_targets(targets, targets_file, ip, domain)
     except ValueError as e:
         console.print(f"[red]✗ {e}[/red]"); raise typer.Exit(1)
-    primary_domain, primary_ip = domain or "", ip or ""
-    for t in tlist:
-        try:
-            ipaddress.ip_network(t, strict=False)
-            if not primary_ip and "/" not in t: primary_ip = t
-        except ValueError:
-            if not primary_domain: primary_domain = t
-    if not primary_ip and primary_domain:
-        try: primary_ip = socket.gethostbyname(primary_domain)
-        except Exception: primary_ip = tlist[0]
-    client = sanitize_client_name((primary_domain or tlist[0]).split(".")[0].title())
+    client = "Quick_" + (domain or ip or tlist[0]).replace(".", "_")[:40]
     audit = load_schema()
-    audit["audit_metadata"].update({"client_name": client, "domain": primary_domain or "",
-        "public_ip": primary_ip or "0.0.0.0", "industry": industry, "auditor": BRAND["name"],
-        "date": datetime.datetime.now().isoformat(), "framework_version": BRAND["version"], "audit_type": "quick"})
-    audit["scope"] = {"in_scope_targets": tlist, "out_of_scope": [], "roe_text": "Quick assessment.",
-                      "authorized_by": "Operator", "authorization_date": datetime.datetime.now().strftime("%Y-%m-%d")}
-    console.print(f"[bold]Quick:[/bold] {len(tlist)} targets\n")
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
-        for name, mod in [("ReconVision","external_scan"),("VulnProbe","vuln_probe"),("WebProbe","web_probe"),
-                          ("BreachVault","breach_vault"),("PolicyEngine","policy_engine"),("SaaS-Sentinel","saas_sentinel")]:
-            task = progress.add_task(f"[cyan]{name}...", total=None)
-            try:
-                if mod == "external_scan":
-                    from external_scan import run_scan; audit = run_scan(audit)
-                elif mod == "vuln_probe":
-                    from vuln_probe import run_scan as rs; audit = rs(audit)
-                elif mod == "web_probe":
-                    from web_probe import run_scan as rs; audit = rs(audit)
-                elif mod == "breach_vault":
-                    from breach_vault import run_scan as rs; audit = rs(audit)
-                elif mod == "policy_engine":
-                    from policy_engine import run_questionnaire; audit = run_questionnaire(audit)
-                else:
-                    from saas_sentinel import run_scan as rs; audit = rs(audit)
-                progress.update(task, description=f"[green]✓ {name}[/green]")
-            except Exception:
-                progress.update(task, description=f"[yellow]⚠ {name}[/yellow]")
-    path = save_audit(audit, f"quick_{client}", passphrase=passphrase)
-    console.print(f"[dim]{path.name}[/dim] → fortifyone report -f {path.name}")
+    audit["audit_metadata"].update({"client_name": client, "domain": domain or "",
+        "public_ip": ip or tlist[0], "industry": industry, "auditor": BRAND["name"],
+        "date": datetime.datetime.now().isoformat(), "framework_version": BRAND["version"]})
+    audit["scope"] = {"in_scope_targets": tlist, "out_of_scope": [],
+        "roe_text": "Authorized security assessment only.",
+        "authorized_by": "Quick scan", "authorization_date": datetime.datetime.now().strftime("%Y-%m-%d")}
+    path = save_audit(audit, client, passphrase=passphrase)
+    console.print(f"[green]✓[/green] Quick engagement created → running modules...")
+    # Re-use run logic lightly
+    try:
+        from external_scan import run_scan as es; audit = es(audit)
+        from vuln_probe import run_scan as vs; audit = vs(audit)
+        from web_probe import run_scan as ws; audit = ws(audit)
+        from saas_sentinel import run_scan as ss; audit = ss(audit)
+    except Exception as e:
+        console.print(f"[yellow]⚠ Partial: {e}[/yellow]")
+    updated = save_audit(audit, f"{client}_updated", passphrase=passphrase)
+    console.print(f"[dim]{updated.name}[/dim] → fortifyone report -f {updated.name}")
 
 @app.command()
 def info():
     header()
-    t = Table(title="Status", box=box.ROUNDED)
-    t.add_column("Item", style="cyan"); t.add_column("Value")
-    t.add_row("Version", BRAND["version"]); t.add_row("Build", BRAND["build"])
-    t.add_row("Audits", str(len(find_audits())))
-    if HAS_CRYPTO_UTILS:
-        st = crypto_status()
-        t.add_row("Encryption ready", "✓" if st["encryption_available"] else "○")
-        t.add_row("Signing ready", "✓" if st["signing_available"] else "○")
-    console.print(t)
-    mt = Table(title="Modules", box=box.ROUNDED)
-    mt.add_column("Module", style="cyan"); mt.add_column("Status")
-    for name, fn in [("ReconVision","external_scan.py"),("VulnProbe","vuln_probe.py"),("WebProbe","web_probe.py"),
-                     ("InternalScan","internal_scan.py"),("LocalHardening","local_hardening.py"),
-                     ("Credentialed","credentialed_scan.py"),("PolicyEngine","policy_engine.py"),
-                     ("BreachVault","breach_vault.py"),("SaaS-Sentinel","saas_sentinel.py"),
-                     ("ReportGenius","report_builder.py"),("EvidencePack","evidence_pack.py"),
-                     ("CryptoUtils","crypto_utils.py")]:
-        mt.add_row(name, "[green]✓[/green]" if (MODULES/fn).exists() else "[red]✗[/red]")
-    console.print(mt)
+    console.print("[bold]Modules[/bold]: ReconVision · VulnProbe · WebProbe · InternalScan · LocalHardening")
+    console.print("            Credentialed (SSH + WinRM readiness) · PolicyEngine · BreachVault · SaaS-Sentinel")
+    console.print("            ReportGenius · EvidencePack · CryptoUtils")
     console.print("[dim]SSH: FORTIFYONE_SSH_HOST / _USER / _KEY  |  Crypto: FORTIFYONE_PASSPHRASE[/dim]")
 
 @app.command()
 def about():
     console.print(Panel.fit(
         f"[bold cyan]{BRAND['name']}[/bold cyan]\n{BRAND['tagline']}\n\nFortifyOne v{BRAND['version']} ({BRAND['build']})\n"
-        "Encrypted audits · Signed reports · Credentialed SSH\nBranded PDF · Engagement letter · Evidence pack\n\n"
+        "Encrypted audits · Signed reports · Credentialed SSH + WinRM readiness\n"
+        "Branded PDF · Engagement letter · Evidence pack\n\n"
         f"{BRAND['url']}", title="About", border_style="cyan"))
 
 if __name__ == "__main__":
