@@ -1,0 +1,94 @@
+{
+  "version": "1.0",
+  "description": "Curated safe, non-exploitative vulnerability indicators for FortifyOne VulnProbe",
+  "templates": [
+    {
+      "id": "SSL-HEARTBLEED",
+      "title": "SSL Heartbleed indicator",
+      "severity": "critical",
+      "match_nse": ["heartbleed", "VULNERABLE"],
+      "remediation": "Upgrade OpenSSL to a patched version and rotate any exposed keys/certs."
+    },
+    {
+      "id": "SSL-POODLE",
+      "title": "SSLv3 POODLE indicator",
+      "severity": "high",
+      "match_nse": ["poodle", "VULNERABLE"],
+      "remediation": "Disable SSLv3 on all services; prefer TLS 1.2+."
+    },
+    {
+      "id": "SMB-ETERNALBLUE",
+      "title": "SMB MS17-010 (EternalBlue) indicator",
+      "severity": "critical",
+      "match_nse": ["ms17-010", "VULNERABLE"],
+      "remediation": "Apply MS17-010 patches; block SMB from the internet; disable SMBv1."
+    },
+    {
+      "id": "SMB-MS08-067",
+      "title": "SMB MS08-067 indicator",
+      "severity": "critical",
+      "match_nse": ["ms08-067", "VULNERABLE"],
+      "remediation": "Patch legacy Windows systems; isolate or retire unsupported hosts."
+    },
+    {
+      "id": "FTP-ANON",
+      "title": "Anonymous FTP enabled",
+      "severity": "high",
+      "match_nse": ["anonymous", "ftp"],
+      "remediation": "Disable anonymous FTP; prefer SFTP with authentication."
+    },
+    {
+      "id": "SSH-V1",
+      "title": "SSHv1 protocol supported",
+      "severity": "high",
+      "match_nse": ["sshv1", "SSHv1"],
+      "remediation": "Disable SSHv1; require SSH protocol 2 only."
+    },
+    {
+      "id": "EXPOSE-RDP",
+      "title": "RDP exposed",
+      "severity": "critical",
+      "match_port": ["3389"],
+      "match_service": ["ms-wbt-server", "rdp"],
+      "remediation": "Remove public RDP; use VPN or zero-trust access with NLA and MFA."
+    },
+    {
+      "id": "EXPOSE-SMB",
+      "title": "SMB exposed publicly",
+      "severity": "critical",
+      "match_port": ["445", "139"],
+      "match_service": ["microsoft-ds", "netbios"],
+      "remediation": "Block SMB at the perimeter; never expose file shares to the internet."
+    },
+    {
+      "id": "EXPOSE-TELNET",
+      "title": "Telnet service exposed",
+      "severity": "critical",
+      "match_port": ["23"],
+      "match_service": ["telnet"],
+      "remediation": "Disable Telnet; replace with SSH."
+    },
+    {
+      "id": "EXPOSE-DB",
+      "title": "Database port exposed",
+      "severity": "critical",
+      "match_port": ["3306", "5432", "1433", "27017", "6379"],
+      "remediation": "Bind databases to localhost/private network; require VPN or bastion access."
+    },
+    {
+      "id": "EXPOSE-VNC",
+      "title": "VNC exposed",
+      "severity": "high",
+      "match_port": ["5900", "5901"],
+      "match_service": ["vnc"],
+      "remediation": "Do not expose VNC publicly; tunnel over VPN/SSH."
+    },
+    {
+      "id": "HTTP-SLOWLORIS",
+      "title": "HTTP Slowloris susceptibility indicator",
+      "severity": "medium",
+      "match_nse": ["slowloris"],
+      "remediation": "Tune web server timeouts and request limits; place behind a reverse proxy/WAF."
+    }
+  ]
+}
