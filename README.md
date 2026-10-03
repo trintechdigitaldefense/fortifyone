@@ -1,9 +1,9 @@
-# 🔐 FortifyOne Audit Framework v5.1
+# 🔐 FortifyOne Audit Framework v5.2
 
-[![Version](https://img.shields.io/badge/version-5.1.0-blue)](https://github.com/trintechdigitaldefense/fortifyone)
+[![Version](https://img.shields.io/badge/version-5.2.0-blue)](https://github.com/trintechdigitaldefense/fortifyone)
 
-**Hardened Cybersecurity Audit Framework**  
-[TrinTech Digital Defense](https://trintechdigitaldefense.github.io) – *Securing Your Digital World*
+**Professional Cybersecurity Audit Framework**  
+[TrinTech Digital Defense](https://trintechdigitaldefense.github.io)
 
 ---
 
@@ -13,97 +13,69 @@ Authorized assessments only. Unauthorized scanning is illegal.
 
 ---
 
-## What’s new in v5.1 (Hardened)
+## v5.2 highlights
 
-| Feature | What it does |
-|---------|----------------|
-| **Encrypted audits at rest** | Audit JSON encrypted with Fernet (PBKDF2) when a passphrase is set |
-| **HMAC-SHA256 signed reports** | PDF / HTML / CSV get `.sig` files so tampering is detectable |
-| **`verify` command** | Check signature validity or confirm an audit decrypts |
-| **Backward compatible** | Without a passphrase, behaviour is unchanged (plaintext) |
+| Feature | Description |
+|---------|-------------|
+| **Credentialed SSH (MVP)** | Key-based remote checks (sshd hardening, listeners, patch hints). No passwords stored in audits. |
+| **Branded multi-page PDF** | Cover + scope/ROE + methodology + prioritized findings |
+| **Engagement letter** | Auto-generated ROE / authorization PDF |
+| **Curated vuln templates** | `config/vuln_templates.json` drives safe indicators |
+| **Evidence pack** | `pack` builds a client ZIP (reports, sigs, findings index, policy evidence) |
+| **Encrypted audits + signed reports** | From v5.1 (`FORTIFYONE_PASSPHRASE`) |
 
 ---
 
 ## Install
 
 ```bash
-git clone git@github.com:trintechdigitaldefense/fortifyone.git
-cd fortifyone
+git pull
 pip3 install -r requirements.txt
-# requires: nmap, dig
+# nmap, dig, ssh client recommended
 python3 main.py info
 ```
 
 ---
 
-## Enable encryption & signing
+## Credentialed SSH
 
 ```bash
-# Recommended: environment variable
-export FORTIFYONE_PASSPHRASE='your-long-random-secret'
+export FORTIFYONE_SSH_HOST=10.0.0.10
+export FORTIFYONE_SSH_USER=auditor
+export FORTIFYONE_SSH_KEY=~/.ssh/id_ed25519
 
-# Or a key file
-export FORTIFYONE_KEY_FILE=/secure/path/fortifyone.key
-
-# Or per-command
-python3 main.py new -c "Acme" -t "acme.com" --passphrase 'your-secret'
+python3 main.py run -m credentialed -f <audit.json>
+# or include in full run:
+python3 main.py run -m all -f <audit.json>
 ```
-
-When a passphrase is configured:
-- New/updated audits are **encrypted** on disk (mode 0600)
-- `report` writes **`.sig`** alongside each deliverable
 
 ---
 
-## Typical flow
+## Reports & evidence pack
 
 ```bash
-export FORTIFYONE_PASSPHRASE='...'
-
-python3 main.py new -c "Acme Corp" -t "203.0.113.1,acme.com" --industry Healthcare --authorized-by "Jane Doe"
-python3 main.py run -m all -f <audit.json>
 python3 main.py report -f <updated.json>
+# → Executive PDF/HTML, Engagement Letter, CSV, optional .sig files
 
-# Verify a deliverable was not tampered with
-python3 main.py verify -f output/Acme_Corp/Acme_Corp_Executive_Report.pdf
+python3 main.py pack -f <updated.json>
+# → *_Evidence_Pack_*.zip
+```
+
+---
+
+## Encryption / signing
+
+```bash
+export FORTIFYONE_PASSPHRASE='long-random-secret'
+python3 main.py verify -f output/Client/Client_Executive_Report.pdf
 ```
 
 ---
 
 ## Modules
 
-| Module | Role |
-|--------|------|
-| ReconVision | Multi-target / CIDR external scan |
-| VulnProbe | Safe NSE + heuristics |
-| WebProbe | CMS / admin path / exposure checks |
-| InternalScan | On-site host discovery |
-| LocalHardening | Local firewall / SSH / patch signals |
-| PolicyEngine | Industry baseline (NIST / CIS / HIPAA) |
-| BreachVault | Credential exposure patterns |
-| SaaS-Sentinel | SPF / DKIM / DMARC + headers |
-| ReportGenius | PDF + HTML + CSV |
-| **CryptoUtils** | Encryption + signing |
+ReconVision · VulnProbe (+ templates) · WebProbe · InternalScan · LocalHardening · **Credentialed** · PolicyEngine · BreachVault · SaaS-Sentinel · ReportGenius · **EvidencePack** · CryptoUtils
 
 ---
 
-## Security notes
-
-- Passphrase never written to audit JSON
-- Encrypted files start with magic `F1ENC1`
-- Signatures: `HMAC-SHA256 fortifyone-v1 <hexdigest>` in `*.sig`
-- Same passphrase must be used to decrypt and to verify
-
----
-
-## Next upgrade candidates
-
-1. Credentialed internal checks (WinRM / SSH MVP)  
-2. Stronger branded multi-page PDF + engagement letter  
-3. Curated safe vuln templates  
-4. Evidence pack generation  
-
----
-
-https://trintechdigitaldefense.github.io  
 https://github.com/trintechdigitaldefense/fortifyone
