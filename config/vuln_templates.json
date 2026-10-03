@@ -1,6 +1,6 @@
 {
-  "version": "1.0",
-  "description": "Curated safe, non-exploitative vulnerability indicators for FortifyOne VulnProbe",
+  "version": "1.1",
+  "description": "Curated safe, non-exploitative vulnerability indicators for FortifyOne VulnProbe. Expanded in v5.3.",
   "templates": [
     {
       "id": "SSL-HEARTBLEED",
@@ -15,6 +15,13 @@
       "severity": "high",
       "match_nse": ["poodle", "VULNERABLE"],
       "remediation": "Disable SSLv3 on all services; prefer TLS 1.2+."
+    },
+    {
+      "id": "SSL-CCS",
+      "title": "SSL CCS Injection indicator",
+      "severity": "high",
+      "match_nse": ["ccs-injection", "VULNERABLE"],
+      "remediation": "Patch OpenSSL / TLS stack; disable vulnerable cipher suites."
     },
     {
       "id": "SMB-ETERNALBLUE",
@@ -72,16 +79,39 @@
       "id": "EXPOSE-DB",
       "title": "Database port exposed",
       "severity": "critical",
-      "match_port": ["3306", "5432", "1433", "27017", "6379"],
+      "match_port": ["3306", "5432", "1433", "27017", "6379", "1521"],
       "remediation": "Bind databases to localhost/private network; require VPN or bastion access."
     },
     {
       "id": "EXPOSE-VNC",
       "title": "VNC exposed",
       "severity": "high",
-      "match_port": ["5900", "5901"],
+      "match_port": ["5900", "5901", "5902"],
       "match_service": ["vnc"],
       "remediation": "Do not expose VNC publicly; tunnel over VPN/SSH."
+    },
+    {
+      "id": "EXPOSE-REDIS",
+      "title": "Redis exposed",
+      "severity": "critical",
+      "match_port": ["6379"],
+      "match_service": ["redis"],
+      "remediation": "Bind Redis to localhost; require AUTH; never expose to the internet."
+    },
+    {
+      "id": "EXPOSE-MONGODB",
+      "title": "MongoDB exposed",
+      "severity": "critical",
+      "match_port": ["27017"],
+      "match_service": ["mongodb"],
+      "remediation": "Enable authentication; bind to private interfaces only."
+    },
+    {
+      "id": "EXPOSE-ELASTIC",
+      "title": "Elasticsearch / OpenSearch exposed",
+      "severity": "critical",
+      "match_port": ["9200", "9300"],
+      "remediation": "Require authentication; place behind VPN or reverse proxy with access control."
     },
     {
       "id": "HTTP-SLOWLORIS",
@@ -89,6 +119,36 @@
       "severity": "medium",
       "match_nse": ["slowloris"],
       "remediation": "Tune web server timeouts and request limits; place behind a reverse proxy/WAF."
+    },
+    {
+      "id": "EXPOSE-DOCKER",
+      "title": "Docker API potentially exposed",
+      "severity": "critical",
+      "match_port": ["2375", "2376"],
+      "remediation": "Never expose the Docker daemon API to the network without TLS + auth."
+    },
+    {
+      "id": "EXPOSE-K8S",
+      "title": "Kubernetes API / etcd exposure indicator",
+      "severity": "critical",
+      "match_port": ["6443", "10250", "2379"],
+      "remediation": "Restrict Kubernetes control-plane and etcd ports to authorized networks only."
+    },
+    {
+      "id": "EXPOSE-LDAP",
+      "title": "LDAP / LDAPS exposed",
+      "severity": "high",
+      "match_port": ["389", "636"],
+      "match_service": ["ldap", "ldaps"],
+      "remediation": "Do not expose directory services to the public internet; require VPN + strong auth."
+    },
+    {
+      "id": "EXPOSE-SMTP-OPEN",
+      "title": "SMTP service on non-standard or high-risk exposure",
+      "severity": "medium",
+      "match_port": ["25", "465", "587"],
+      "match_service": ["smtp"],
+      "remediation": "Ensure SMTP is not an open relay; enforce authentication and TLS."
     }
   ]
 }

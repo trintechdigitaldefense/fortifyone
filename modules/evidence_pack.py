@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Evidence Pack generator
-Creates a client-ready ZIP: reports, signatures, findings index, policy evidence notes.
+Evidence Pack generator v5.3
+Creates a client-ready ZIP: reports, signatures, findings index, policy evidence, README.
 """
 
 from __future__ import annotations
@@ -78,12 +78,51 @@ def build_evidence_pack(
         "generated": datetime.datetime.now().isoformat(),
     }, indent=2), encoding="utf-8")
 
+    # Credentialed summary (no secrets)
+    cred_path = out / f"{client}_Credentialed_Summary.json"
+    cred = audit_data.get("credentialed_scan", {})
+    if cred:
+        cred_path.write_text(json.dumps({
+            "enabled": cred.get("enabled"),
+            "host": cred.get("host"),
+            "checks_run": cred.get("checks_run"),
+            "risk_score": cred.get("risk_score"),
+            "findings_count": len(cred.get("findings", [])),
+            "winrm": cred.get("winrm", {}),
+            "note": cred.get("note"),
+            "scan_timestamp": cred.get("scan_timestamp"),
+        }, indent=2), encoding="utf-8")
+
+    # Pack README
+    readme_path = out / "README_EVIDENCE_PACK.txt"
+    readme_path.write_text(
+        f"FortifyOne Evidence Pack\n"
+        f"=======================\n"
+        f"Client: {meta.get('client_name')}\n"
+        f"Generated: {datetime.datetime.now().isoformat()}\n"
+        f"Framework: {meta.get('framework_version')}\n"
+        f"\nContents:\n"
+        f"- Executive Report (PDF/HTML)\n"
+        f"- Engagement Letter (PDF)\n"
+        f"- Remediation Plan (CSV)\n"
+        f"- Findings Index (CSV)\n"
+        f"- Policy Evidence (JSON)\n"
+        f"- Credentialed Summary (JSON, if run)\n"
+        f"- audit_summary.json\n"
+        f"- Optional .sig signature files\n"
+        f"- MANIFEST.json\n"
+        f"\nThis pack is confidential and intended solely for the named client.\n"
+        f"TrinTech Digital Defense – Securing Your Digital World\n",
+        encoding="utf-8",
+    )
+
     # Manifest
     manifest = {
         "client": meta.get("client_name"),
         "generated": datetime.datetime.now().isoformat(),
         "framework_version": meta.get("framework_version"),
         "scope": audit_data.get("scope", {}),
+        "overall_risk_hint": None,
         "contents": [],
     }
 
@@ -95,7 +134,6 @@ def build_evidence_pack(
         f"{client}_Engagement_Letter.pdf",
         "audit_summary.json",
     ]
-    # Also include any .sig siblings
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for name in patterns:
             p = out / name
@@ -109,10 +147,14 @@ def build_evidence_pack(
                     zf.write(sig, arcname=sig.name)
                     manifest["contents"].append(sig.name)
 
-        for p in (index_path, policy_path):
+        for p in (index_path, policy_path, readme_path):
             if p.is_file():
                 zf.write(p, arcname=p.name)
                 manifest["contents"].append(p.name)
+
+        if cred_path.is_file():
+            zf.write(cred_path, arcname=cred_path.name)
+            manifest["contents"].append(cred_path.name)
 
         if extra_files:
             for fp in extra_files:
@@ -121,11 +163,10 @@ def build_evidence_pack(
                     zf.write(p, arcname=p.name)
                     manifest["contents"].append(p.name)
 
-        # Write manifest into zip
         zf.writestr("MANIFEST.json", json.dumps(manifest, indent=2))
 
     return str(zip_path)
 
 
 if __name__ == "__main__":
-    print("Evidence pack module ready")
+    print("Evidence pack module ready (v5.3)")
