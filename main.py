@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
-FortifyOne Audit Framework v5.0 (Client-Ready)
+FortifyOne Audit Framework v5.1 (Hardened)
 TrinTech Digital Defense – Securing Your Digital World
 AUTHORIZED USE ONLY.
+
+v5.1: Encrypted audit data at rest + HMAC-SHA256 signed reports.
 """
 import json, os, sys, socket, datetime, ipaddress, re
 from pathlib import Path
@@ -18,17 +20,33 @@ BRAND = {
     "name": "TrinTech Digital Defense",
     "tagline": "Securing Your Digital World",
     "url": "https://trintechdigitaldefense.github.io",
-    "version": "5.0.0",
-    "build": "Client-Ready",
+    "version": "5.1.0",
+    "build": "Hardened",
 }
 NOTICE = "[bold red]⚠ AUTHORIZED USE ONLY[/bold red]\nAuthorized assessments only. Unauthorized scanning is illegal."
 console = Console()
 app = typer.Typer(help=f"FortifyOne v{BRAND['version']}")
 BASE = Path(__file__).parent.resolve()
-CONFIG, DATA, OUTPUT, MODULES = BASE/"config", BASE/"data", BASE/"output", BASE/"modules"
+CONFIG, DATA, OUTPUT, MODULES = BASE / "config", BASE / "data", BASE / "output", BASE / "modules"
 SCHEMA = CONFIG / "schema.json"
 for d in (CONFIG, DATA, OUTPUT, MODULES):
     d.mkdir(parents=True, exist_ok=True)
+
+sys.path.insert(0, str(MODULES))
+
+try:
+    from crypto_utils import (
+        save_json_secure,
+        load_json_secure,
+        sign_file,
+        verify_file,
+        crypto_status,
+        is_encrypted_bytes,
+    )
+    HAS_CRYPTO_UTILS = True
+except ImportError:
+    HAS_CRYPTO_UTILS = False
+
 
 def validate_domain(d: str) -> str:
     d = (d or "").strip().lower()
@@ -37,6 +55,7 @@ def validate_domain(d: str) -> str:
     if any(c in d for c in ";|&$`<>()\n\r\\\"'"):
         raise ValueError("Forbidden characters")
     return d
+
 
 def validate_target(raw: str) -> str:
     raw = (raw or "").strip()
@@ -52,11 +71,13 @@ def validate_target(raw: str) -> str:
             raise
     return validate_domain(raw)
 
+
 def sanitize_client_name(name: str) -> str:
     clean = re.sub(r"[^a-zA-Z0-9_\- ]", "", (name or "")).strip()
     if not clean or len(clean) > 80:
         raise ValueError("Invalid client name")
     return clean
+
 
 def parse_targets(targets_str=None, targets_file=None, ip=None, domain=None) -> List[str]:
     collected = []
@@ -90,24 +111,33 @@ def parse_targets(targets_str=None, targets_file=None, ip=None, domain=None) -> 
         raise ValueError("No valid targets")
     return valid
 
+
 def load_schema() -> dict:
     with open(SCHEMA) as f:
         return json.load(f)
 
-def save_audit(data: dict, client: str) -> Path:
+
+def save_audit(data: dict, client: str, passphrase: Optional[str] = None) -> Path:
     safe = sanitize_client_name(client)
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     path = DATA / f"{safe.replace(' ', '_')}_{ts}.json"
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)
-    try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
+    if HAS_CRYPTO_UTILS:
+        encrypted = save_json_secure(path, data, passphrase=passphrase)
+        if encrypted:
+            console.print("[dim]🔒 Audit saved encrypted[/dim]")
+    else:
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2)
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
     return path
 
+
 def find_audits() -> list:
-    return sorted(DATA.glob("*.json"), key=os.path.getmtime, reverse=True)
+    return sorted(list(DATA.glob("*.json")) + list(DATA.glob("*.json.enc")), key=os.path.getmtime, reverse=True)
+
 
 def header():
     console.print(Panel.fit(
@@ -115,16 +145,35 @@ def header():
         f"[bold]{BRAND['name']}[/bold]\n[dim]{BRAND['tagline']}[/dim]",
         border_style="cyan"))
 
+
 def auth():
     console.print(Panel(NOTICE, border_style="red", title="Legal Notice"))
 
-def load_audit(name: str) -> dict:
+
+def load_audit(name: str, passphrase: Optional[str] = None) -> dict:
     path = Path(name) if Path(name).is_absolute() else DATA / name
     if not path.exists():
         console.print("[red]✗ File not found[/red]")
         raise typer.Exit(1)
+    if HAS_CRYPTO_UTILS:
+        try:
+            return load_json_secure(path, passphrase=passphrase)
+        except ValueError as e:
+            console.print(f"[red]✗ {e}[/red]")
+            raise typer.Exit(1)
     with open(path) as f:
         return json.load(f)
+
+
+def _sign_outputs(paths: list, passphrase: Optional[str] = None):
+    if not HAS_CRYPTO_UTILS:
+        return
+    for p in paths:
+        if p and Path(p).is_file():
+            sig = sign_file(Path(p), passphrase=passphrase)
+            if sig:
+                console.print(f"[dim]🔏 Signed: {Path(p).name}.sig[/dim]")
+
 
 @app.command()
 def new(
@@ -135,9 +184,11 @@ def new(
     targets_file: str = typer.Option(None, "--targets-file"),
     industry: str = typer.Option("General", "--industry"),
     authorized_by: str = typer.Option("", "--authorized-by"),
+    passphrase: str = typer.Option(None, "--passphrase", "-p", help="Encrypt audit (or set FORTIFYONE_PASSPHRASE)"),
 ):
     """Create multi-target engagement."""
-    header(); auth()
+    header()
+    auth()
     try:
         client_name = sanitize_client_name(client_name)
         tlist = parse_targets(targets, targets_file, public_ip, domain)
@@ -180,9 +231,10 @@ def new(
         "authorization_date": datetime.datetime.now().strftime("%Y-%m-%d"),
         "notes": f"{len(tlist)} target(s)",
     }
-    path = save_audit(audit, client_name)
+    path = save_audit(audit, client_name, passphrase=passphrase)
     console.print(f"[green]✓[/green] Created [bold]{client_name}[/bold] ({len(tlist)} targets)")
     console.print(f"[dim]{path.name}[/dim] → fortifyone run -f {path.name}")
+
 
 @app.command(name="list")
 def list_cmd():
@@ -192,31 +244,41 @@ def list_cmd():
         console.print("[yellow]No audits.[/yellow]")
         return
     t = Table(title="Audits", box=box.ROUNDED)
-    t.add_column("#", style="cyan"); t.add_column("Client"); t.add_column("Date", style="dim")
+    t.add_column("#", style="cyan")
+    t.add_column("Client")
+    t.add_column("Date", style="dim")
+    t.add_column("Enc", style="dim")
     for i, f in enumerate(files, 1):
+        enc = ""
         try:
-            with open(f) as jf:
-                d = json.load(jf)
-            c = d.get("audit_metadata", {}).get("client_name", f.stem)
-            dt = str(d.get("audit_metadata", {}).get("date", ""))[:10]
+            if HAS_CRYPTO_UTILS and is_encrypted_bytes(f.read_bytes()[:16]):
+                enc = "🔒"
+                c, dt = f.stem, "encrypted"
+            else:
+                with open(f) as jf:
+                    d = json.load(jf)
+                c = d.get("audit_metadata", {}).get("client_name", f.stem)
+                dt = str(d.get("audit_metadata", {}).get("date", ""))[:10]
         except Exception:
             c, dt = f.stem, "?"
-        t.add_row(str(i), c, dt)
+        t.add_row(str(i), c, dt, enc)
     console.print(t)
+
 
 @app.command()
 def run(
     module: str = typer.Option("all", "--module", "-m",
-        help="all, external, vuln, web, internal, local, policy, breach, saas"),
+                               help="all, external, vuln, web, internal, local, policy, breach, saas"),
     audit_file: str = typer.Option(..., "--file", "-f"),
+    passphrase: str = typer.Option(None, "--passphrase", "-p"),
 ):
     """Run audit modules."""
-    header(); auth()
-    audit = load_audit(audit_file)
+    header()
+    auth()
+    audit = load_audit(audit_file, passphrase=passphrase)
     client = audit["audit_metadata"]["client_name"]
     console.print(f"[bold]Target:[/bold] {client}\n")
     results = {}
-    sys.path.insert(0, str(MODULES))
 
     def go(name, key, importer):
         task = progress.add_task(f"[cyan]{name}...", total=None)
@@ -252,44 +314,48 @@ def run(
         if module in ("all", "saas"):
             go("SaaS-Sentinel", "SaaS", lambda: __import__("saas_sentinel", fromlist=["run_scan"]).run_scan)
 
-    # Enrich result labels
     if "External" in results:
-        results["External"] = f"{audit.get('external_scan',{}).get('targets_count',1)} targets, {len(audit.get('external_scan',{}).get('open_ports',[]))} ports"
+        results["External"] = f"{audit.get('external_scan', {}).get('targets_count', 1)} targets, {len(audit.get('external_scan', {}).get('open_ports', []))} ports"
     if "Vuln" in results:
-        results["Vuln"] = f"{len(audit.get('vuln_probe',{}).get('findings',[]))} findings"
+        results["Vuln"] = f"{len(audit.get('vuln_probe', {}).get('findings', []))} findings"
     if "Web" in results:
-        results["Web"] = f"CMS={audit.get('web_probe',{}).get('cms') or 'n/a'}, {len(audit.get('web_probe',{}).get('findings',[]))} findings"
+        results["Web"] = f"CMS={audit.get('web_probe', {}).get('cms') or 'n/a'}, {len(audit.get('web_probe', {}).get('findings', []))} findings"
     if "Internal" in results:
-        results["Internal"] = f"{audit.get('internal_scan',{}).get('hosts_discovered',0)} hosts"
+        results["Internal"] = f"{audit.get('internal_scan', {}).get('hosts_discovered', 0)} hosts"
     if "Local" in results:
-        results["Local"] = f"{len(audit.get('local_hardening',{}).get('findings',[]))} findings"
+        results["Local"] = f"{len(audit.get('local_hardening', {}).get('findings', []))} findings"
     if "Policy" in results:
-        results["Policy"] = f"{audit.get('policy_compliance',{}).get('overall_compliance_percentage',0):.0f}%"
+        results["Policy"] = f"{audit.get('policy_compliance', {}).get('overall_compliance_percentage', 0):.0f}%"
     if "Breach" in results:
-        results["Breach"] = f"{audit.get('breach_exposure',{}).get('compromised_credentials',0)} hits"
+        results["Breach"] = f"{audit.get('breach_exposure', {}).get('compromised_credentials', 0)} hits"
     if "SaaS" in results:
         results["SaaS"] = audit.get("saas_posture", {}).get("score_grade", "?")
 
-    updated = save_audit(audit, f"{client}_updated")
+    updated = save_audit(audit, f"{client}_updated", passphrase=passphrase)
     console.print("\n[bold green]═══ Complete ═══[/bold green]")
     if results:
         t = Table(box=box.ROUNDED)
-        t.add_column("Module", style="cyan"); t.add_column("Result")
+        t.add_column("Module", style="cyan")
+        t.add_column("Result")
         for m, r in results.items():
             t.add_row(m, str(r))
         console.print(t)
     console.print(f"[dim]{updated.name}[/dim] → fortifyone report -f {updated.name}")
 
+
 @app.command()
-def report(audit_file: str = typer.Option(..., "--file", "-f")):
-    """HTML + PDF + CSV."""
-    header(); auth()
-    audit = load_audit(audit_file)
+def report(
+    audit_file: str = typer.Option(..., "--file", "-f"),
+    passphrase: str = typer.Option(None, "--passphrase", "-p"),
+):
+    """HTML + PDF + CSV (auto-signed when passphrase configured)."""
+    header()
+    auth()
+    audit = load_audit(audit_file, passphrase=passphrase)
     client = audit["audit_metadata"]["client_name"]
     out = OUTPUT / sanitize_client_name(client).replace(" ", "_")
     out.mkdir(exist_ok=True)
     try:
-        sys.path.insert(0, str(MODULES))
         from report_builder import generate_executive_report, generate_remediation_plan, generate_pdf_report
         html = generate_executive_report(audit, str(out))
         csvp = generate_remediation_plan(audit, str(out))
@@ -297,33 +363,76 @@ def report(audit_file: str = typer.Option(..., "--file", "-f")):
         console.print(f"[green]✓[/green] HTML: {Path(html).name}")
         console.print(f"[green]✓[/green] PDF:  {Path(pdf).name}" if pdf else "[yellow]⚠ PDF: pip install fpdf2[/yellow]")
         console.print(f"[green]✓[/green] CSV:  {Path(csvp).name}")
-        with open(out / "audit_summary.json", "w") as f:
-            json.dump(audit, f, indent=2, default=str)
+        summary = out / "audit_summary.json"
+        if HAS_CRYPTO_UTILS:
+            save_json_secure(summary, audit, passphrase=passphrase)
+        else:
+            with open(summary, "w") as f:
+                json.dump(audit, f, indent=2, default=str)
+        _sign_outputs([html, csvp, pdf, str(summary)], passphrase=passphrase)
     except Exception as e:
         console.print(f"[red]✗ {e}[/red]")
         raise typer.Exit(1)
     console.print(f"\n[bold]{out}[/bold]")
 
+
+@app.command()
+def verify(
+    file_path: str = typer.Option(..., "--file", "-f", help="Report or audit file to verify"),
+    passphrase: str = typer.Option(None, "--passphrase", "-p"),
+):
+    """Verify HMAC signature of a report or check audit encryption status."""
+    header()
+    path = Path(file_path)
+    if not path.is_absolute() and not path.exists():
+        # try output or data dirs
+        for base in (OUTPUT, DATA, Path(".")):
+            candidate = base / file_path
+            if candidate.exists():
+                path = candidate
+                break
+            # recursive light search in output
+            if base == OUTPUT and base.exists():
+                hits = list(base.rglob(Path(file_path).name))
+                if hits:
+                    path = hits[0]
+                    break
+    if not path.exists():
+        console.print("[red]✗ File not found[/red]")
+        raise typer.Exit(1)
+
+    if HAS_CRYPTO_UTILS and is_encrypted_bytes(path.read_bytes()[:16]):
+        console.print(f"[green]🔒[/green] {path.name} is encrypted")
+        try:
+            load_json_secure(path, passphrase=passphrase)
+            console.print("[green]✓[/green] Decrypts successfully with current passphrase")
+        except ValueError as e:
+            console.print(f"[red]✗ {e}[/red]")
+            raise typer.Exit(1)
+        return
+
+    if not HAS_CRYPTO_UTILS:
+        console.print("[yellow]crypto_utils not available[/yellow]")
+        raise typer.Exit(1)
+
+    ok, msg = verify_file(path, passphrase=passphrase)
+    if ok:
+        console.print(f"[green]✓[/green] {msg}: {path.name}")
+    else:
+        console.print(f"[red]✗[/red] {msg}: {path.name}")
+        raise typer.Exit(1)
+
+
 @app.command()
 def compare(
-    baseline: str = typer.Option(..., "--baseline", "-b", help="Earlier audit JSON"),
-    current: str = typer.Option(..., "--current", "-c", help="Newer audit JSON"),
+    baseline: str = typer.Option(..., "--baseline", "-b"),
+    current: str = typer.Option(..., "--current", "-c"),
+    passphrase: str = typer.Option(None, "--passphrase", "-p"),
 ):
     """Compare two audits and show risk / finding deltas."""
     header()
-    a = load_audit(baseline)
-    b = load_audit(current)
-
-    def risk(d):
-        from report_builder import _overall_risk
-        sys.path.insert(0, str(MODULES))
-        try:
-            from report_builder import _overall_risk as r
-            return r(d)
-        except Exception:
-            return d.get("external_scan", {}).get("risk_score", 0)
-
-    sys.path.insert(0, str(MODULES))
+    a = load_audit(baseline, passphrase=passphrase)
+    b = load_audit(current, passphrase=passphrase)
     from report_builder import _overall_risk, _build_findings
     ra, rb = _overall_risk(a), _overall_risk(b)
     fa, fb = _build_findings(a), _build_findings(b)
@@ -331,11 +440,13 @@ def compare(
     titles_b = {f["title"] for f in fb}
     new_findings = titles_b - titles_a
     resolved = titles_a - titles_b
-
     t = Table(title="Audit Comparison", box=box.ROUNDED)
-    t.add_column("Metric", style="cyan"); t.add_column("Baseline"); t.add_column("Current"); t.add_column("Delta")
-    t.add_row("Overall Risk", str(ra), str(rb), f"{rb-ra:+d}")
-    t.add_row("Findings", str(len(fa)), str(len(fb)), f"{len(fb)-len(fa):+d}")
+    t.add_column("Metric", style="cyan")
+    t.add_column("Baseline")
+    t.add_column("Current")
+    t.add_column("Delta")
+    t.add_row("Overall Risk", str(ra), str(rb), f"{rb - ra:+d}")
+    t.add_row("Findings", str(len(fa)), str(len(fb)), f"{len(fb) - len(fa):+d}")
     t.add_row("New findings", "-", str(len(new_findings)), "")
     t.add_row("Resolved", str(len(resolved)), "-", "")
     console.print(t)
@@ -348,6 +459,7 @@ def compare(
         for x in list(resolved)[:10]:
             console.print(f"  • {x}")
 
+
 @app.command()
 def quick(
     domain: str = typer.Option(None, "--domain", "-d"),
@@ -355,9 +467,11 @@ def quick(
     targets: str = typer.Option(None, "--targets", "-t"),
     targets_file: str = typer.Option(None, "--targets-file"),
     industry: str = typer.Option("General", "--industry"),
+    passphrase: str = typer.Option(None, "--passphrase", "-p"),
 ):
     """One-shot external + web + vuln audit."""
-    header(); auth()
+    header()
+    auth()
     try:
         tlist = parse_targets(targets, targets_file, ip, domain)
     except ValueError as e:
@@ -384,63 +498,86 @@ def quick(
         "industry": industry, "auditor": BRAND["name"],
         "date": datetime.datetime.now().isoformat(), "framework_version": BRAND["version"], "audit_type": "quick",
     })
-    audit["scope"] = {"in_scope_targets": tlist, "out_of_scope": [], "roe_text": "Quick assessment.",
-                      "authorized_by": "Operator", "authorization_date": datetime.datetime.now().strftime("%Y-%m-%d")}
+    audit["scope"] = {
+        "in_scope_targets": tlist, "out_of_scope": [], "roe_text": "Quick assessment.",
+        "authorized_by": "Operator", "authorization_date": datetime.datetime.now().strftime("%Y-%m-%d"),
+    }
     console.print(f"[bold]Quick:[/bold] {len(tlist)} targets\n")
-    sys.path.insert(0, str(MODULES))
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
-        for name, mod in [("ReconVision","external_scan"),("VulnProbe","vuln_probe"),("WebProbe","web_probe"),
-                          ("BreachVault","breach_vault"),("PolicyEngine","policy_engine"),("SaaS-Sentinel","saas_sentinel")]:
+        for name, mod in [
+            ("ReconVision", "external_scan"), ("VulnProbe", "vuln_probe"), ("WebProbe", "web_probe"),
+            ("BreachVault", "breach_vault"), ("PolicyEngine", "policy_engine"), ("SaaS-Sentinel", "saas_sentinel"),
+        ]:
             task = progress.add_task(f"[cyan]{name}...", total=None)
             try:
                 if mod == "external_scan":
                     from external_scan import run_scan
                     audit = run_scan(audit)
                 elif mod == "vuln_probe":
-                    from vuln_probe import run_scan as rs; audit = rs(audit)
+                    from vuln_probe import run_scan as rs
+                    audit = rs(audit)
                 elif mod == "web_probe":
-                    from web_probe import run_scan as rs; audit = rs(audit)
+                    from web_probe import run_scan as rs
+                    audit = rs(audit)
                 elif mod == "breach_vault":
-                    from breach_vault import run_scan as rs; audit = rs(audit)
+                    from breach_vault import run_scan as rs
+                    audit = rs(audit)
                 elif mod == "policy_engine":
-                    from policy_engine import run_questionnaire; audit = run_questionnaire(audit)
+                    from policy_engine import run_questionnaire
+                    audit = run_questionnaire(audit)
                 else:
-                    from saas_sentinel import run_scan as rs; audit = rs(audit)
+                    from saas_sentinel import run_scan as rs
+                    audit = rs(audit)
                 progress.update(task, description=f"[green]✓ {name}[/green]")
             except Exception:
                 progress.update(task, description=f"[yellow]⚠ {name}[/yellow]")
-    path = save_audit(audit, f"quick_{client}")
+    path = save_audit(audit, f"quick_{client}", passphrase=passphrase)
     console.print(f"[dim]{path.name}[/dim] → fortifyone report -f {path.name}")
+
 
 @app.command()
 def info():
     header()
     t = Table(title="Status", box=box.ROUNDED)
-    t.add_column("Item", style="cyan"); t.add_column("Value")
-    t.add_row("Version", BRAND["version"]); t.add_row("Build", BRAND["build"])
+    t.add_column("Item", style="cyan")
+    t.add_column("Value")
+    t.add_row("Version", BRAND["version"])
+    t.add_row("Build", BRAND["build"])
     t.add_row("Audits", str(len(find_audits())))
+    if HAS_CRYPTO_UTILS:
+        st = crypto_status()
+        t.add_row("Cryptography lib", "✓" if st["cryptography_installed"] else "✗")
+        t.add_row("Passphrase set", "✓" if st["passphrase_configured"] else "○ not set")
+        t.add_row("Encryption ready", "✓" if st["encryption_available"] else "○")
+        t.add_row("Signing ready", "✓" if st["signing_available"] else "○")
+    else:
+        t.add_row("Crypto utils", "✗ missing")
     console.print(t)
     mt = Table(title="Modules", box=box.ROUNDED)
-    mt.add_column("Module", style="cyan"); mt.add_column("Status")
+    mt.add_column("Module", style="cyan")
+    mt.add_column("Status")
     for name, fn in [
         ("ReconVision", "external_scan.py"), ("VulnProbe", "vuln_probe.py"),
         ("WebProbe", "web_probe.py"), ("InternalScan", "internal_scan.py"),
         ("LocalHardening", "local_hardening.py"), ("PolicyEngine", "policy_engine.py"),
         ("BreachVault", "breach_vault.py"), ("SaaS-Sentinel", "saas_sentinel.py"),
-        ("ReportGenius", "report_builder.py"),
+        ("ReportGenius", "report_builder.py"), ("CryptoUtils", "crypto_utils.py"),
     ]:
         mt.add_row(name, "[green]✓[/green]" if (MODULES / fn).exists() else "[red]✗[/red]")
     console.print(mt)
+    console.print("\n[dim]Tip: export FORTIFYONE_PASSPHRASE='your-strong-secret' to enable encryption & signing[/dim]")
+
 
 @app.command()
 def about():
     console.print(Panel.fit(
         f"[bold cyan]{BRAND['name']}[/bold cyan]\n{BRAND['tagline']}\n\n"
         f"FortifyOne v{BRAND['version']} ({BRAND['build']})\n"
-        "Multi-target · VulnProbe · WebProbe · LocalHardening\n"
-        "PDF reports · Compare · Industry policy baseline\n\n"
+        "Encrypted audits · Signed reports · Multi-target\n"
+        "VulnProbe · WebProbe · LocalHardening\n\n"
         f"{BRAND['url']}",
         title="About", border_style="cyan"))
+
 
 if __name__ == "__main__":
     app()
