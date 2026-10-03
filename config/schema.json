@@ -6,9 +6,9 @@
     "industry": "General",
     "auditor": "TrinTech Digital Defense",
     "date": "",
-    "framework_version": "5.2.0",
+    "framework_version": "5.3.0",
     "compliance_frameworks": ["NIST_CSF", "CIS_v8", "HIPAA"],
-    "version": "2.1.0"
+    "version": "2.2.0"
   },
   "scope": {
     "in_scope_targets": [],
@@ -47,6 +47,7 @@
     "checks_run": 0,
     "findings": [],
     "risk_score": 0,
+    "winrm": {},
     "scan_timestamp": "",
     "note": ""
   },
