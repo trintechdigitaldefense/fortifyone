@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-ReportGenius v4 – HTML + PDF + CSV
-Includes external, vuln, web, local hardening, policy, breach, SaaS findings.
+ReportGenius v5 – Branded multi-page PDF, engagement letter, HTML, CSV
 TrinTech Digital Defense
 """
 import os
@@ -42,6 +41,7 @@ def _build_findings(audit_data: dict) -> List[Dict[str, Any]]:
     vuln = audit_data.get("vuln_probe", {})
     web = audit_data.get("web_probe", {})
     local = audit_data.get("local_hardening", {})
+    cred = audit_data.get("credentialed_scan", {})
 
     for p in external.get("open_ports", []):
         risk = p.get("risk_level", "medium")
@@ -72,6 +72,7 @@ def _build_findings(audit_data: dict) -> List[Dict[str, Any]]:
                 "description": r.get("evidence", "Critical control not verified."),
                 "remediation": r.get("remediation", "Implement and document."),
                 "severity": "high", "category": "Policy", "effort": "4–16 hours",
+                "evidence": r.get("evidence", ""),
             })
 
     if breach.get("compromised_credentials", 0) > 0:
@@ -87,7 +88,7 @@ def _build_findings(audit_data: dict) -> List[Dict[str, Any]]:
             findings.append({
                 "title": f.get("title", "Email/SaaS issue"),
                 "description": f.get("detail", ""),
-                "remediation": "Fix SPF/DKIM/DMARC; target p=reject. Add missing security headers.",
+                "remediation": "Fix SPF/DKIM/DMARC; target p=reject.",
                 "severity": f.get("severity"), "category": "Email / SaaS", "effort": "1–4 hours",
             })
 
@@ -97,7 +98,7 @@ def _build_findings(audit_data: dict) -> List[Dict[str, Any]]:
         findings.append({
             "title": f.get("title", "Vuln indicator"),
             "description": f.get("detail", ""),
-            "remediation": "Validate, patch, disable obsolete protocols, restrict access.",
+            "remediation": f.get("remediation") or "Validate, patch, restrict access.",
             "severity": f.get("severity", "medium"), "category": "Vulnerability", "effort": "2–12 hours",
         })
 
@@ -107,7 +108,7 @@ def _build_findings(audit_data: dict) -> List[Dict[str, Any]]:
         findings.append({
             "title": f.get("title", "Web exposure"),
             "description": f.get("detail", ""),
-            "remediation": "Remove or protect exposed paths; restrict admin interfaces; keep CMS patched.",
+            "remediation": "Protect or remove exposed paths; keep CMS patched.",
             "severity": f.get("severity", "medium"), "category": "Web Application", "effort": "1–8 hours",
         })
 
@@ -117,8 +118,18 @@ def _build_findings(audit_data: dict) -> List[Dict[str, Any]]:
         findings.append({
             "title": f.get("title", "Local hardening"),
             "description": f.get("detail", ""),
-            "remediation": f.get("remediation", "Harden the local host configuration."),
+            "remediation": f.get("remediation", "Harden host configuration."),
             "severity": f.get("severity", "medium"), "category": "Local Host", "effort": "1–4 hours",
+        })
+
+    for f in cred.get("findings", []):
+        if f.get("severity") in ("info", "good", "low"):
+            continue
+        findings.append({
+            "title": f.get("title", "Credentialed finding"),
+            "description": f.get("detail", ""),
+            "remediation": f.get("remediation", "Remediate on the authenticated host."),
+            "severity": f.get("severity", "medium"), "category": f.get("category", "Credentialed"), "effort": "1–8 hours",
         })
 
     order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -132,7 +143,8 @@ def _overall_risk(audit_data: dict) -> int:
     v = audit_data.get("vuln_probe", {}).get("risk_score", 0)
     w = audit_data.get("web_probe", {}).get("risk_score", 0)
     loc = audit_data.get("local_hardening", {}).get("risk_score", 0)
-    return min(100, int(ext * 0.28 + inte * 0.15 + v * 0.17 + w * 0.12 + loc * 0.08 + (100 - pol) * 0.20))
+    cred = audit_data.get("credentialed_scan", {}).get("risk_score", 0)
+    return min(100, int(ext * 0.25 + inte * 0.12 + v * 0.15 + w * 0.10 + loc * 0.08 + cred * 0.10 + (100 - pol) * 0.20))
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><title>FortifyOne – {{ client_name }}</title>
@@ -154,7 +166,7 @@ h2{color:#00d4ff;margin-top:28px;border-bottom:1px solid #2d3561;padding-bottom:
 .badge.critical{background:#ff4757;color:#fff}.badge.high{background:#ff6b6b;color:#fff}.badge.medium{background:#ffa502;color:#1a1f3a}
 .footer{text-align:center;color:#8892b0;margin-top:40px;font-size:.78em;border-top:1px solid #2d3561;padding-top:14px}
 </style></head><body><div class="container">
-<div class="header"><h1>🛡️ FortifyOne Security Assessment</h1>
+<div class="header"><h1>FortifyOne Security Assessment</h1>
 <p class="tagline">{{ client_name }} | {{ date }} | TrinTech Digital Defense</p>
 <p class="tagline">Framework v{{ version }}</p></div>
 {% if roe_text %}<div class="roe"><strong>Rules of Engagement / Scope</strong><br>{{ roe_text }}
@@ -173,7 +185,7 @@ h2{color:#00d4ff;margin-top:28px;border-bottom:1px solid #2d3561;padding-bottom:
 <p>{{ f.description }}</p><p><strong>Remediation:</strong> {{ f.remediation }}</p>
 <p><strong>Category:</strong> {{ f.category }} | <strong>Effort:</strong> {{ f.effort }}</p></div>
 {% endfor %}{% else %}<p style="color:#8892b0">No high-priority findings.</p>{% endif %}
-<div class="footer">FortifyOne | TrinTech Digital Defense | {{ generation_date }} | Confidential – authorized use only</div>
+<div class="footer">FortifyOne | TrinTech Digital Defense | {{ generation_date }} | Confidential</div>
 </div></body></html>"""
 
 def generate_executive_report(audit_data: dict, output_dir: str) -> str:
@@ -184,7 +196,7 @@ def generate_executive_report(audit_data: dict, output_dir: str) -> str:
     overall = _overall_risk(audit_data)
     html = Template(HTML_TEMPLATE).render(
         client_name=client_name, date=str(meta.get("date", ""))[:10],
-        version=meta.get("framework_version", "5.0"), overall_risk=overall,
+        version=meta.get("framework_version", "5.2"), overall_risk=overall,
         external_ports=len(audit_data.get("external_scan", {}).get("open_ports", [])),
         compliance=round(audit_data.get("policy_compliance", {}).get("overall_compliance_percentage", 0)),
         breach_count=audit_data.get("breach_exposure", {}).get("compromised_credentials", 0),
@@ -199,19 +211,22 @@ def generate_executive_report(audit_data: dict, output_dir: str) -> str:
         f.write(html)
     return path
 
-class AuditPDF(FPDF):
+class BrandPDF(FPDF):
     def header(self):
-        self.set_font("Helvetica", "B", 11)
+        if self.page_no() == 1:
+            return
+        self.set_font("Helvetica", "B", 9)
         self.set_text_color(0, 100, 140)
-        self.cell(0, 8, "FortifyOne – TrinTech Digital Defense", ln=True)
+        self.cell(0, 7, "FortifyOne  |  TrinTech Digital Defense", ln=True)
         self.set_draw_color(0, 150, 200)
         self.line(10, self.get_y(), 200, self.get_y())
-        self.ln(4)
+        self.ln(3)
+
     def footer(self):
-        self.set_y(-15)
+        self.set_y(-14)
         self.set_font("Helvetica", "I", 8)
         self.set_text_color(120, 120, 120)
-        self.cell(0, 8, f"Confidential | Page {self.page_no()}/{{nb}}", align="C")
+        self.cell(0, 8, f"Confidential  |  Page {self.page_no()}/{{nb}}  |  Authorized use only", align="C")
 
 def generate_pdf_report(audit_data: dict, output_dir: str) -> str:
     if not HAS_FPDF:
@@ -221,48 +236,168 @@ def generate_pdf_report(audit_data: dict, output_dir: str) -> str:
     scope = audit_data.get("scope", {})
     findings = _build_findings(audit_data)
     overall = _overall_risk(audit_data)
-    pdf = AuditPDF()
+
+    pdf = BrandPDF()
     pdf.alias_nb_pages()
     pdf.set_auto_page_break(auto=True, margin=18)
+
+    # Cover
     pdf.add_page()
-    pdf.set_font("Helvetica", "B", 18)
-    pdf.set_text_color(0, 80, 120)
-    pdf.cell(0, 10, "Security Assessment Report", ln=True)
+    pdf.set_fill_color(10, 14, 39)
+    pdf.rect(0, 0, 210, 297, "F")
+    pdf.set_text_color(0, 212, 255)
+    pdf.set_font("Helvetica", "B", 26)
+    pdf.ln(60)
+    pdf.cell(0, 12, "SECURITY ASSESSMENT", ln=True, align="C")
+    pdf.set_font("Helvetica", "", 14)
+    pdf.set_text_color(200, 210, 220)
+    pdf.cell(0, 10, "Executive Report", ln=True, align="C")
+    pdf.ln(20)
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 10, client_name, ln=True, align="C")
     pdf.set_font("Helvetica", "", 11)
+    pdf.set_text_color(180, 190, 200)
+    pdf.cell(0, 8, f"Date: {str(meta.get('date', ''))[:10]}", ln=True, align="C")
+    pdf.cell(0, 8, f"Framework: FortifyOne v{meta.get('framework_version', '5.2')}", ln=True, align="C")
+    pdf.cell(0, 8, f"Overall Risk Score: {overall}/100", ln=True, align="C")
+    pdf.ln(30)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 6, "TrinTech Digital Defense", ln=True, align="C")
+    pdf.cell(0, 6, "Securing Your Digital World", ln=True, align="C")
+    pdf.cell(0, 6, "https://trintechdigitaldefense.github.io", ln=True, align="C")
+
+    # Methodology + ROE
+    pdf.add_page()
     pdf.set_text_color(40, 40, 40)
-    pdf.cell(0, 7, f"Client: {client_name}", ln=True)
-    pdf.cell(0, 7, f"Date: {str(meta.get('date', ''))[:10]} | v{meta.get('framework_version', '5.0')}", ln=True)
-    pdf.ln(2)
-    if scope.get("roe_text"):
-        pdf.set_font("Helvetica", "B", 10)
-        pdf.cell(0, 6, "Rules of Engagement", ln=True)
-        pdf.set_font("Helvetica", "", 9)
-        pdf.multi_cell(0, 5, scope.get("roe_text", ""))
-        if scope.get("authorized_by"):
-            pdf.cell(0, 5, f"Authorized by: {scope.get('authorized_by')}", ln=True)
-        pdf.ln(2)
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 6, f"Overall Risk: {overall}/100", ln=True)
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 8, "1. Scope & Rules of Engagement", ln=True)
     pdf.set_font("Helvetica", "", 9)
-    pdf.ln(3)
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(0, 7, "Prioritized Findings", ln=True)
-    for i, f in enumerate(findings[:16], 1):
-        sev = f.get("severity", "medium").upper()
+    pdf.multi_cell(0, 5, scope.get("roe_text", "Authorized security assessment only."))
+    if scope.get("authorized_by"):
+        pdf.ln(2)
+        pdf.cell(0, 5, f"Authorized by: {scope.get('authorized_by')}  |  Date: {scope.get('authorization_date', 'N/A')}", ln=True)
+    targets = scope.get("in_scope_targets") or []
+    if targets:
+        pdf.ln(2)
         pdf.set_font("Helvetica", "B", 9)
-        pdf.set_text_color(180, 40, 40) if sev == "CRITICAL" else pdf.set_text_color(40, 40, 40)
-        pdf.multi_cell(0, 5, f"{i}. [{sev}] {f.get('title', '')}")
-        pdf.set_text_color(40, 40, 40)
+        pdf.cell(0, 5, "In-scope targets:", ln=True)
         pdf.set_font("Helvetica", "", 8)
-        pdf.multi_cell(0, 4, f.get("description", ""))
-        pdf.set_font("Helvetica", "I", 8)
-        pdf.multi_cell(0, 4, f"Fix: {f.get('remediation', '')}")
-        pdf.ln(1)
-    pdf.ln(3)
+        pdf.multi_cell(0, 4, ", ".join(str(t) for t in targets[:30]))
+
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 8, "2. Methodology", ln=True)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.multi_cell(0, 5,
+        "This assessment used FortifyOne modules: external multi-target scanning (ReconVision), "
+        "safe vulnerability indicators (VulnProbe + curated templates), web exposure checks (WebProbe), "
+        "optional internal discovery, local hardening signals, optional SSH credentialed checks, "
+        "email/SaaS posture, credential exposure patterns, and an industry-aware policy baseline. "
+        "No denial-of-service or exploitation was performed."
+    )
+
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 8, "3. Executive Summary Metrics", ln=True)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(0, 5, f"Overall Risk Score: {overall}/100", ln=True)
+    pdf.cell(0, 5, f"External open ports: {len(audit_data.get('external_scan', {}).get('open_ports', []))}", ln=True)
+    pdf.cell(0, 5, f"Internal hosts discovered: {audit_data.get('internal_scan', {}).get('hosts_discovered', 0)}", ln=True)
+    pdf.cell(0, 5, f"Policy compliance: {audit_data.get('policy_compliance', {}).get('overall_compliance_percentage', 0):.0f}%", ln=True)
+    pdf.cell(0, 5, f"SaaS / Email grade: {audit_data.get('saas_posture', {}).get('score_grade', 'N/A')}", ln=True)
+
+    # Findings
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.set_text_color(40, 40, 40)
+    pdf.cell(0, 8, "4. Prioritized Findings & Remediation", ln=True)
+    pdf.ln(2)
+    if not findings:
+        pdf.set_font("Helvetica", "", 9)
+        pdf.cell(0, 5, "No high-priority findings recorded.", ln=True)
+    else:
+        for i, f in enumerate(findings[:20], 1):
+            sev = f.get("severity", "medium").upper()
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.set_text_color(180, 40, 40) if sev == "CRITICAL" else pdf.set_text_color(40, 40, 40)
+            pdf.multi_cell(0, 5, f"{i}. [{sev}] {f.get('title', '')}")
+            pdf.set_text_color(40, 40, 40)
+            pdf.set_font("Helvetica", "", 8)
+            pdf.multi_cell(0, 4, f.get("description", ""))
+            pdf.set_font("Helvetica", "I", 8)
+            pdf.multi_cell(0, 4, f"Remediation: {f.get('remediation', '')}")
+            pdf.set_font("Helvetica", "", 8)
+            pdf.cell(0, 4, f"Category: {f.get('category', '')}  |  Effort: {f.get('effort', 'TBD')}", ln=True)
+            pdf.ln(2)
+
+    pdf.ln(4)
     pdf.set_font("Helvetica", "I", 8)
     pdf.set_text_color(100, 100, 100)
-    pdf.multi_cell(0, 4, "Confidential. Authorized use only. TrinTech Digital Defense.")
+    pdf.multi_cell(0, 4, "This report is confidential and intended solely for the named client. "
+                   "TrinTech Digital Defense – Securing Your Digital World.")
+
     path = os.path.join(output_dir, f"{client_name.replace(' ', '_')}_Executive_Report.pdf")
+    pdf.output(path)
+    return path
+
+def generate_engagement_letter(audit_data: dict, output_dir: str) -> str:
+    """Generate a short engagement / ROE letter PDF."""
+    if not HAS_FPDF:
+        return ""
+    meta = audit_data.get("audit_metadata", {})
+    scope = audit_data.get("scope", {})
+    client = meta.get("client_name", "Client")
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.set_text_color(0, 80, 120)
+    pdf.cell(0, 10, "Engagement Letter & Rules of Engagement", ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(40, 40, 40)
+    pdf.ln(4)
+    pdf.cell(0, 6, f"Client: {client}", ln=True)
+    pdf.cell(0, 6, f"Date: {str(meta.get('date', ''))[:10]}", ln=True)
+    pdf.cell(0, 6, f"Auditor: {meta.get('auditor', 'TrinTech Digital Defense')}", ln=True)
+    pdf.cell(0, 6, f"Industry: {meta.get('industry', 'General')}", ln=True)
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 7, "Authorization", ln=True)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.multi_cell(0, 5,
+        f"This letter confirms that a security assessment has been authorized for the named client. "
+        f"Authorized by: {scope.get('authorized_by', 'Client representative')}. "
+        f"Authorization date: {scope.get('authorization_date', 'N/A')}."
+    )
+    pdf.ln(3)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 7, "Rules of Engagement", ln=True)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.multi_cell(0, 5, scope.get("roe_text", "Authorized assessment only."))
+    pdf.ln(3)
+    targets = scope.get("in_scope_targets") or []
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 7, "In-Scope Targets", ln=True)
+    pdf.set_font("Helvetica", "", 9)
+    if targets:
+        pdf.multi_cell(0, 5, ", ".join(str(t) for t in targets))
+    else:
+        pdf.cell(0, 5, "As defined in the engagement record.", ln=True)
+    pdf.ln(3)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 7, "Out of Scope / Prohibited", ln=True)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.multi_cell(0, 5,
+        "Denial-of-service testing; social engineering of staff without separate written approval; "
+        "data exfiltration; testing of systems not listed in scope; any activity outside the authorization window."
+    )
+    pdf.ln(8)
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.set_text_color(100, 100, 100)
+    pdf.multi_cell(0, 4, "TrinTech Digital Defense  |  https://trintechdigitaldefense.github.io  |  Confidential")
+
+    path = os.path.join(output_dir, f"{client.replace(' ', '_')}_Engagement_Letter.pdf")
     pdf.output(path)
     return path
 
@@ -279,4 +414,4 @@ def generate_remediation_plan(audit_data: dict, output_dir: str) -> str:
     return path
 
 if __name__ == "__main__":
-    print("ReportGenius v4 ready")
+    print("ReportGenius v5 ready")
