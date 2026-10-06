@@ -1,118 +1,94 @@
-# 🔐 FortifyOne Audit Framework v5.4
+# 🔐 FortifyOne Audit Engine v6.0
 
-[![Version](https://img.shields.io/badge/version-5.4.0-blue)](https://github.com/trintechdigitaldefense/fortifyone)
+[![Version](https://img.shields.io/badge/version-6.0.0-blue)](https://github.com/trintechdigitaldefense/fortifyone)
 
-**Professional Cybersecurity Audit Framework**  
-[TrinTech Digital Defense](https://trintechdigitaldefense.github.io)
+**Primary professional network audit platform — TrinTech Digital Defense**
+
+One coherent workflow for chargeable, defensible assessments:
+
+```text
+fortifyone init  →  fortifyone run  →  fortifyone report  →  fortifyone pack
+```
+
+Sentinel, Mirage, and trintech-guardian remain **post-audit** continuous protection tools.  
+FortifyOne is the **only** primary audit engine.
 
 ---
 
 ## ⚠ AUTHORIZED USE ONLY
 
-Authorized assessments only. Unauthorized scanning is illegal under the Trinidad & Tobago Cybercrime Act and equivalent laws.
+Authorized assessments only. Unauthorized scanning is illegal under the Trinidad & Tobago Cybercrime Act and equivalent laws. Always record ROE / authorization reference.
 
 ---
 
-## v5.4 highlights
+## Operator workflow (locked)
 
-| Feature | Description |
-|---------|-------------|
-| **TLS / HTTP posture** | Certificate validity, protocol support (TLS 1.0–1.3), security headers (HSTS, CSP, etc.) |
-| **Richer safe templates** | 35 curated non-exploitative indicators (databases, containers, management UIs, weak ciphers…) |
-| **Interactive HTML dashboard** | Self-contained offline dashboard with severity filters and control evidence |
-| **Redacted report mode** | `--redacted` scrubs internal IPs for client-shareable outputs |
-| **Multi-host credentialed** | SSH inventory file + improved WinRM (readiness + optional pywinrm auth) |
-| **Stronger compliance mapping** | NIST CSF, CIS v8, HIPAA, ISO 27001, PCI-DSS indicators + evidence-to-control linkage |
-| **Watch / continuous mode** | Lightweight external + TLS + web delta for retainers (`fortifyone watch`) |
-| **Plugin system** | Drop Python plugins into `modules/plugins/` |
-| **Better secret handling** | Key file, optional OS keyring, restrictive secret file helpers |
+```bash
+# 1. Create engagement with ROE
+python3 main.py init -c "Client Name" -d example.com -i 203.0.113.10 \
+  --roe "ROE-2026-042 / Jane Doe" --service smallbiz --industry Technology
+
+# 2. Run modules (full or selective)
+python3 main.py run -m all -f <engagement.json>
+# or: -m external,osint,web,tls,vuln,credentialed,policy
+
+# 3. Professional deliverables
+python3 main.py report -f <updated.json>
+python3 main.py report -f <updated.json> --redacted   # client-shareable
+
+# 4. Evidence pack (mandatory for delivery)
+python3 main.py pack -f <updated.json>
+```
+
+Engagement IDs look like `ENG-261006-A1B2C3`.
+
+---
+
+## What v6 absorbs / strengthens
+
+| Capability | Status |
+|------------|--------|
+| Discovery & inventory | External multi-target + internal + OSINT subdomain/DNS/WHOIS hints |
+| Vulnerability identification | 35+ safe templates + NSE-oriented VulnProbe |
+| Configuration / hardening | Multi-host SSH credentialed + WinRM path |
+| Web application coverage | Expanded paths, CMS, headers, TLS posture |
+| OSINT | DNS, WHOIS summary, SPF/DMARC, common subdomain resolution |
+| Professional reporting | Branded PDF, letter, interactive dashboard, redacted mode |
+| Scoring & roadmap | 100−penalty score, Grade A–F, Immediate/This Week/This Month/Ongoing |
+| Evidence chain | Signed reports + EvidencePack ZIP |
+| Secrets | Passphrase, key file, optional OS keyring |
 
 ---
 
 ## Install
 
 ```bash
-git pull
+git clone https://github.com/trintechdigitaldefense/fortifyone.git
+cd fortifyone
 pip3 install -r requirements.txt
-# nmap, dig, ssh client recommended
-# optional: pip install pywinrm keyring
-python3 main.py info
-```
-
----
-
-## Quick start
-
-```bash
-python3 main.py new -c "ClientName" -d example.com -i 203.0.113.10 --authorized-by "You"
-python3 main.py run -m all -f <audit.json>
-python3 main.py report -f <updated.json>
-python3 main.py report -f <updated.json> --redacted   # client-shareable
-python3 main.py pack -f <updated.json>
-python3 main.py watch -f <audit.json>                 # continuous delta
-```
-
----
-
-## Credentialed (SSH multi-host + WinRM)
-
-```bash
-# Single host
-export FORTIFYONE_SSH_HOST=10.0.0.10
-export FORTIFYONE_SSH_USER=auditor
-export FORTIFYONE_SSH_KEY=~/.ssh/id_ed25519
-
-# Multi-host inventory (one line per host)
-# host user [key] [port]
-# winrm:host user
-export FORTIFYONE_SSH_INVENTORY=./inventory.txt
-
-# WinRM (optional full checks need: pip install pywinrm)
-export FORTIFYONE_WINRM_HOST=10.0.0.20
-export FORTIFYONE_WINRM_USER=auditor
-# export FORTIFYONE_WINRM_PASS=...   # never stored in audit JSON
-
-python3 main.py run -m credentialed -f <audit.json>
-```
-
----
-
-## TLS posture & templates
-
-```bash
-python3 main.py run -m tls -f <audit.json>
-# Vuln templates: config/vuln_templates.json (35 safe indicators)
-```
-
----
-
-## Plugins
-
-```bash
-python3 main.py plugins --list
-# Drop modules/plugins/mycheck.py with:
-#   PLUGIN_NAME = "mycheck"
-#   def run(audit_data): ...
-python3 main.py run -m plugins -f <audit.json>
-```
-
----
-
-## Secrets
-
-```bash
-export FORTIFYONE_PASSPHRASE='long-random-secret'
-# or
-export FORTIFYONE_KEY_FILE=~/.fortifyone/key
-# optional: pip install keyring  (OS keyring support)
+# Recommended: nmap, dig, whois, ssh client
+# Optional: pywinrm, keyring
+python3 main.py about
 ```
 
 ---
 
 ## Modules
 
-ReconVision · VulnProbe (+ templates) · WebProbe · **TLSPosture** · InternalScan · LocalHardening · **Credentialed (SSH multi-host + WinRM)** · PolicyEngine (evidence linkage) · BreachVault · SaaS-Sentinel · ReportGenius · **Dashboard** · EvidencePack · **WatchMode** · **PluginLoader** · CryptoUtils
+ReconVision · OSINT · VulnProbe · WebProbe · TLSPosture · InternalScan · LocalHardening · Credentialed (SSH multi-host + WinRM) · PolicyEngine · BreachVault · SaaS-Sentinel · Scoring · ReportGenius · Dashboard · EvidencePack · WatchMode · PluginLoader · CryptoUtils
 
 ---
 
-https://github.com/trintechdigitaldefense/fortifyone
+## Keep separate (do not merge)
+
+- **Sentinel** — continuous monitoring, FIM, reverse-shell
+- **Mirage** — pure deception layer
+- **trintech-guardian** — active containment / IPS
+
+---
+
+## License & contact
+
+Authorized defensive use only.  
+TrinTech Digital Defense · Trinidad & Tobago  
+https://trintechdigitaldefense.github.io

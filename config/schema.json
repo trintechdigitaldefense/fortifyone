@@ -6,9 +6,17 @@
     "industry": "General",
     "auditor": "TrinTech Digital Defense",
     "date": "",
-    "framework_version": "5.4.0",
-    "compliance_frameworks": ["NIST_CSF", "CIS_v8", "HIPAA", "ISO27001", "PCI_DSS"],
-    "version": "2.3.0"
+    "framework_version": "6.0.0",
+    "compliance_frameworks": [
+      "NIST_CSF",
+      "CIS_v8",
+      "HIPAA",
+      "ISO27001",
+      "PCI_DSS"
+    ],
+    "version": "3.0.0",
+    "engagement_id": "",
+    "service_tier": "standard"
   },
   "scope": {
     "in_scope_targets": [],
@@ -131,7 +139,26 @@
   "final_report": {
     "executive_summary": "",
     "risk_score": 0,
+    "grade": "N/A",
+    "severity_counts": {},
     "estimated_financial_impact": "",
-    "remediation_plan": []
+    "remediation_plan": [],
+    "findings_total": 0
+  },
+  "osint_recon": {
+    "domain": null,
+    "dns": {},
+    "whois": {},
+    "subdomains": [],
+    "findings": [],
+    "risk_score": 0,
+    "scan_timestamp": "",
+    "note": ""
+  },
+  "scoring": {
+    "score": 0,
+    "grade": "N/A",
+    "severity_counts": {},
+    "roadmap_items": 0
   }
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FortifyOne v5.4 (Professional) - TrinTech Digital Defense. AUTHORIZED USE ONLY."""
+"""FortifyOne Audit Engine v6.0 - TrinTech Digital Defense. AUTHORIZED USE ONLY."""
 import json, os, sys, socket, datetime, ipaddress, re
 from pathlib import Path
 from typing import Optional, List
@@ -11,7 +11,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich import box
 
 BRAND = {"name": "TrinTech Digital Defense", "tagline": "Securing Your Digital World",
-         "url": "https://trintechdigitaldefense.github.io", "version": "5.4.0", "build": "Professional"}
+         "url": "https://trintechdigitaldefense.github.io", "version": "6.0.0", "build": "Professional"}
 NOTICE = "[bold red]⚠ AUTHORIZED USE ONLY[/bold red]\nAuthorized assessments only. Unauthorized scanning is illegal."
 console = Console()
 app = typer.Typer(help=f"FortifyOne v{BRAND['version']}")
@@ -118,6 +118,54 @@ def _sign_outputs(paths: list, passphrase: Optional[str] = None):
             sig = sign_file(Path(p), passphrase=passphrase)
             if sig: console.print(f"[dim]🔏 Signed: {Path(p).name}.sig[/dim]")
 
+
+@app.command()
+def init(
+    client_name: str = typer.Option(..., "--client", "-c"),
+    domain: str = typer.Option(None, "--domain", "-d"),
+    ip: str = typer.Option(None, "--ip", "-i"),
+    targets: str = typer.Option(None, "--targets", "-t"),
+    targets_file: str = typer.Option(None, "--targets-file"),
+    industry: str = typer.Option("General", "--industry"),
+    authorized_by: str = typer.Option(..., "--roe", "--authorized-by", help="ROE reference or authorizer name (required)"),
+    service: str = typer.Option("standard", "--service", help="micro | standard | smallbiz | full"),
+    passphrase: str = typer.Option(None, "--passphrase", "-p"),
+):
+    """Create engagement with ROE reference (primary operator entrypoint)."""
+    header(); auth()
+    # Engagement ID: ENG-YYMMDD-XXXX
+    import secrets
+    eng_id = f"ENG-{datetime.datetime.now().strftime('%y%m%d')}-{secrets.token_hex(3).upper()}"
+    try:
+        tlist = parse_targets(targets, targets_file, ip, domain)
+    except ValueError as e:
+        console.print(f"[red]✗ {e}[/red]"); raise typer.Exit(1)
+    schema = load_schema()
+    meta = schema["audit_metadata"]
+    meta["client_name"] = sanitize_client_name(client_name)
+    meta["domain"] = domain or ""
+    meta["public_ip"] = ip or ""
+    meta["industry"] = industry
+    meta["date"] = datetime.datetime.now().isoformat()
+    meta["framework_version"] = BRAND["version"]
+    meta["engagement_id"] = eng_id
+    meta["service_tier"] = service
+    schema["scope"]["in_scope_targets"] = tlist
+    schema["scope"]["authorized_by"] = authorized_by
+    schema["scope"]["authorization_date"] = datetime.datetime.now().strftime("%Y-%m-%d")
+    schema["scope"]["roe_text"] = (
+        f"ROE {eng_id}. Authorized security assessment only. "
+        "No DoS, no social engineering without written approval, no data exfiltration. "
+        f"Authorized by: {authorized_by}."
+    )
+    schema["scope"]["notes"] = f"{len(tlist)} target(s) | tier={service}"
+    path = save_audit(schema, client_name, passphrase=passphrase)
+    console.print(f"[green]✓[/green] Engagement [bold]{eng_id}[/bold] — {meta['client_name']} ({len(tlist)} targets)")
+    console.print(f"[dim]ROE:[/dim] {authorized_by}")
+    console.print(f"[dim]{path.name}[/dim] → fortifyone run -f {path.name}")
+    console.print("[dim]Workflow: init → run → report → pack[/dim]")
+
+
 @app.command()
 def new(client_name: str = typer.Option(..., "--client", "-c"),
         domain: str = typer.Option(None, "--domain", "-d"),
@@ -181,7 +229,7 @@ def list_cmd():
 
 @app.command()
 def run(module: str = typer.Option("all", "--module", "-m",
-            help="all, external, vuln, web, tls, internal, local, credentialed, policy, breach, saas, plugins"),
+            help="all, external, vuln, web, tls, osint, internal, local, credentialed, policy, breach, saas, plugins"),
         audit_file: str = typer.Option(..., "--file", "-f"),
         passphrase: str = typer.Option(None, "--passphrase", "-p")):
     """Run audit modules."""
@@ -226,6 +274,8 @@ def run(module: str = typer.Option("all", "--module", "-m",
             go("BreachVault", "Breach", lambda: __import__("breach_vault", fromlist=["run_scan"]).run_scan)
         if want("saas"):
             go("SaaS-Sentinel", "SaaS", lambda: __import__("saas_sentinel", fromlist=["run_scan"]).run_scan)
+        if want("osint"):
+            go("OSINT", "OSINT", lambda: __import__("osint_recon", fromlist=["run_scan"]).run_scan)
         if want("plugins"):
             go("Plugins", "Plugins", lambda: __import__("plugin_loader", fromlist=["run_plugins"]).run_plugins)
     if "External" in results:
@@ -240,6 +290,12 @@ def run(module: str = typer.Option("all", "--module", "-m",
     if "Breach" in results: results["Breach"] = f"{audit.get('breach_exposure',{}).get('compromised_credentials',0)} hits"
     if "SaaS" in results: results["SaaS"] = audit.get("saas_posture",{}).get("score_grade","?")
     if "Plugins" in results: results["Plugins"] = f"{len(audit.get('plugins',{}).get('ran',{}))} ran"
+    try:
+        from scoring import apply_scoring
+        audit = apply_scoring(audit)
+        results["Score"] = f"{audit.get('scoring',{}).get('score',0)}/100 {audit.get('scoring',{}).get('grade','?')}"
+    except Exception as se:
+        console.print(f"[yellow]Scoring: {se}[/yellow]")
     updated = save_audit(audit, f"{client}_updated", passphrase=passphrase)
     console.print("\n[bold green]═══ Complete ═══[/bold green]")
     if results:
@@ -413,8 +469,8 @@ def info():
 def about():
     console.print(Panel.fit(
         f"[bold cyan]{BRAND['name']}[/bold cyan]\n{BRAND['tagline']}\n\nFortifyOne v{BRAND['version']} ({BRAND['build']})\n"
-        "Encrypted audits · Signed reports · Credentialed SSH/WinRM multi-host · TLS posture · Dashboard · Watch mode · Plugins\n"
-        "Branded PDF · Interactive dashboard · Engagement letter · Evidence pack · Redacted mode\n\n"
+        "Primary audit engine · Engagement ROE · Discovery · OSINT · Credentialed depth · TLS · Dashboard · Evidence chain\n"
+        "init → run → report → pack · Scoring + remediation roadmap · Redacted client outputs\n\n"
         f"{BRAND['url']}", title="About", border_style="cyan"))
 
 @app.command()
