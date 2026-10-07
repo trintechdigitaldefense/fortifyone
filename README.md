@@ -1,6 +1,6 @@
-# 🔐 FortifyOne Audit Engine v6.0
+# 🔐 FortifyOne Audit Engine v6.1
 
-[![Version](https://img.shields.io/badge/version-6.0.0-blue)](https://github.com/trintechdigitaldefense/fortifyone)
+[![Version](https://img.shields.io/badge/version-6.1.0-blue)](https://github.com/trintechdigitaldefense/fortifyone)
 
 **Primary professional network audit platform — TrinTech Digital Defense**
 
@@ -75,7 +75,7 @@ python3 main.py about
 
 ## Modules
 
-ReconVision · OSINT · VulnProbe · WebProbe · TLSPosture · InternalScan · LocalHardening · Credentialed (SSH multi-host + WinRM) · PolicyEngine · BreachVault · SaaS-Sentinel · Scoring · ReportGenius · Dashboard · EvidencePack · WatchMode · PluginLoader · CryptoUtils
+ReconVision · Inventory · OSINT · VulnProbe · WebProbe · TLSPosture · InternalScan · LocalHardening · Credentialed (SSH multi-host + WinRM) · PolicyEngine · BreachVault · SaaS-Sentinel · Scoring · ReportGenius · Dashboard · EvidencePack · WatchMode · PluginLoader · CryptoUtils
 
 ---
 

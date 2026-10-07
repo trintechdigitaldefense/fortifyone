@@ -304,6 +304,92 @@ def _ssh_checks(host: str, user: str, key: str, port: int) -> Tuple[List[Dict], 
             "controls": ["PR.AC-3", "CIS-5.1"],
         })
 
+    # Passwordless local accounts via passwd -S style sample
+    rc8b, out8b = _run_ssh(
+        host, user, key, port,
+        "getent passwd | awk -F: '$3>=1000 && $3<65000 {print $1}' | head -20 | while read u; do passwd -S \"$u\" 2>/dev/null; done | grep -E ' NP | L ' | head -10 || true",
+    )
+    checks_run += 1
+    if out8b and "NP" in out8b:
+        findings.append({
+            "title": "Passwordless (NP) local account(s) indicated",
+            "detail": out8b[:300],
+            "severity": "critical",
+            "category": "Identity",
+            "host": host,
+            "remediation": "Set passwords or lock accounts; enforce password policy.",
+            "controls": ["PR.AC-1", "CIS-4.1"],
+        })
+
+    # SUID binaries sample (world-related risk)
+    rc9, out9 = _run_ssh(
+        host, user, key, port,
+        "find /usr /bin /sbin -type f -perm -4000 2>/dev/null | head -25",
+    )
+    checks_run += 1
+    if out9 and rc9 == 0 and out9.strip():
+        findings.append({
+            "title": "SUID binaries present (sample inventory)",
+            "detail": out9[:400],
+            "severity": "info",
+            "category": "Privilege",
+            "host": host,
+            "remediation": "Review SUID binaries; remove unexpected setuid bits.",
+            "controls": ["PR.AC-4"],
+        })
+
+    # Unattended upgrades / automatic security updates
+    rc10, out10 = _run_ssh(
+        host, user, key, port,
+        "(cat /etc/apt/apt.conf.d/20auto-upgrades 2>/dev/null; systemctl is-enabled unattended-upgrades 2>/dev/null; dnf -q versionlock list 2>/dev/null | head -3) || true",
+    )
+    checks_run += 1
+    low10 = out10.lower()
+    if out10 and "1" not in out10 and "enabled" not in low10:
+        findings.append({
+            "title": "Automatic security updates may not be enabled",
+            "detail": out10[:250] or "No auto-upgrades configuration detected",
+            "severity": "medium",
+            "category": "Patching",
+            "host": host,
+            "remediation": "Enable unattended-upgrades (Debian/Ubuntu) or equivalent automatic security updates.",
+            "controls": ["PR.IP-1", "CIS-7.1"],
+        })
+
+    # fail2ban / intrusion prevention hint
+    rc11, out11 = _run_ssh(
+        host, user, key, port,
+        "(systemctl is-active fail2ban 2>/dev/null || systemctl is-active sshguard 2>/dev/null || echo 'no_bruteforce_protection') || true",
+    )
+    checks_run += 1
+    if "no_bruteforce_protection" in out11 or (out11 and "inactive" in out11 and "active" not in out11):
+        findings.append({
+            "title": "No fail2ban/sshguard-style protection detected",
+            "detail": out11[:200],
+            "severity": "low",
+            "category": "Network",
+            "host": host,
+            "remediation": "Deploy fail2ban or equivalent against SSH/auth brute force.",
+            "controls": ["PR.AC-3"],
+        })
+
+    # Kernel / OS version for patching context
+    rc12, out12 = _run_ssh(
+        host, user, key, port,
+        "uname -r; cat /etc/os-release 2>/dev/null | head -6",
+    )
+    checks_run += 1
+    if out12 and rc12 == 0:
+        findings.append({
+            "title": "OS / kernel inventory",
+            "detail": out12[:300],
+            "severity": "info",
+            "category": "Inventory",
+            "host": host,
+            "remediation": "Track OS lifecycle; upgrade EOL platforms.",
+            "controls": ["ID.AM-1"],
+        })
+
     return findings, checks_run
 
 

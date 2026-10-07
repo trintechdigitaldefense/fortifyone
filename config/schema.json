@@ -6,7 +6,7 @@
     "industry": "General",
     "auditor": "TrinTech Digital Defense",
     "date": "",
-    "framework_version": "6.0.0",
+    "framework_version": "6.1.0",
     "compliance_frameworks": [
       "NIST_CSF",
       "CIS_v8",
@@ -160,5 +160,12 @@
     "grade": "N/A",
     "severity_counts": {},
     "roadmap_items": 0
+  },
+  "inventory": {
+    "assets": [],
+    "asset_count": 0,
+    "topology_notes": [],
+    "scan_timestamp": "",
+    "note": ""
   }
 }

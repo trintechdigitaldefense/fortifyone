@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FortifyOne Audit Engine v6.0 - TrinTech Digital Defense. AUTHORIZED USE ONLY."""
+"""FortifyOne Audit Engine v6.1 - TrinTech Digital Defense. AUTHORIZED USE ONLY."""
 import json, os, sys, socket, datetime, ipaddress, re
 from pathlib import Path
 from typing import Optional, List
@@ -11,7 +11,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich import box
 
 BRAND = {"name": "TrinTech Digital Defense", "tagline": "Securing Your Digital World",
-         "url": "https://trintechdigitaldefense.github.io", "version": "6.0.0", "build": "Professional"}
+         "url": "https://trintechdigitaldefense.github.io", "version": "6.1.0", "build": "Professional"}
 NOTICE = "[bold red]⚠ AUTHORIZED USE ONLY[/bold red]\nAuthorized assessments only. Unauthorized scanning is illegal."
 console = Console()
 app = typer.Typer(help=f"FortifyOne v{BRAND['version']}")
@@ -229,7 +229,7 @@ def list_cmd():
 
 @app.command()
 def run(module: str = typer.Option("all", "--module", "-m",
-            help="all, external, vuln, web, tls, osint, internal, local, credentialed, policy, breach, saas, plugins"),
+            help="all, external, vuln, web, tls, osint, internal, local, credentialed, policy, breach, saas, inventory, plugins"),
         audit_file: str = typer.Option(..., "--file", "-f"),
         passphrase: str = typer.Option(None, "--passphrase", "-p")):
     """Run audit modules."""
@@ -276,6 +276,8 @@ def run(module: str = typer.Option("all", "--module", "-m",
             go("SaaS-Sentinel", "SaaS", lambda: __import__("saas_sentinel", fromlist=["run_scan"]).run_scan)
         if want("osint"):
             go("OSINT", "OSINT", lambda: __import__("osint_recon", fromlist=["run_scan"]).run_scan)
+        if want("inventory"):
+            go("Inventory", "Inventory", lambda: __import__("inventory", fromlist=["run_scan"]).run_scan)
         if want("plugins"):
             go("Plugins", "Plugins", lambda: __import__("plugin_loader", fromlist=["run_plugins"]).run_plugins)
     if "External" in results:
@@ -290,6 +292,12 @@ def run(module: str = typer.Option("all", "--module", "-m",
     if "Breach" in results: results["Breach"] = f"{audit.get('breach_exposure',{}).get('compromised_credentials',0)} hits"
     if "SaaS" in results: results["SaaS"] = audit.get("saas_posture",{}).get("score_grade","?")
     if "Plugins" in results: results["Plugins"] = f"{len(audit.get('plugins',{}).get('ran',{}))} ran"
+    try:
+        from inventory import build_inventory
+        audit = build_inventory(audit)
+        results["Inventory"] = f"{audit.get('inventory',{}).get('asset_count',0)} assets"
+    except Exception as ie:
+        console.print(f"[yellow]Inventory: {ie}[/yellow]")
     try:
         from scoring import apply_scoring
         audit = apply_scoring(audit)
