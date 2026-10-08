@@ -228,89 +228,190 @@ def list_cmd():
     console.print(t)
 
 @app.command()
-def run(module: str = typer.Option("all", "--module", "-m",
-            help="all, external, vuln, web, tls, osint, internal, local, credentialed, policy, breach, saas, inventory, plugins"),
+def run(module: str = typer.Option("full", "--module", "-m",
+            help="full|all (ordered pipeline) or comma list: external,osint,internal,inventory,vuln,web,tls,credentialed,local,policy,breach,saas,plugins"),
         audit_file: str = typer.Option(..., "--file", "-f"),
         passphrase: str = typer.Option(None, "--passphrase", "-p")):
-    """Run audit modules."""
+    """Run audit modules. Use -m full for the complete ordered pipeline."""
     header(); auth()
     audit = load_audit(audit_file, passphrase=passphrase)
     client = audit["audit_metadata"]["client_name"]
-    console.print(f"[bold]Target:[/bold] {client}\n")
+    eng = audit.get("audit_metadata", {}).get("engagement_id", "")
+    console.print(f"[bold]Client:[/bold] {client}" + (f"  [dim]{eng}[/dim]" if eng else ""))
+    console.print(f"[dim]Workflow: discovery → inventory → vuln/web → credentialed → scoring[/dim]\n")
+
     mods = {m.strip().lower() for m in module.split(",")}
+    is_full = bool(mods & {"full", "all"})
+
     def want(*names):
-        return "all" in mods or any(n in mods for n in names)
+        if is_full:
+            return True
+        return any(n in mods for n in names)
+
+    # Ordered pipeline phases (name, key, import_path, attr, full_only_default)
+    # Inventory & scoring always run at end for full; inventory also if explicitly requested
+    pipeline = [
+        ("1/10 External Discovery", "External", "external_scan", "run_scan", "external"),
+        ("2/10 OSINT", "OSINT", "osint_recon", "run_scan", "osint"),
+        ("3/10 Internal Discovery", "Internal", "internal_scan", "run_scan", "internal"),
+        ("4/10 Vulnerability Probe", "Vuln", "vuln_probe", "run_scan", "vuln"),
+        ("5/10 Web Probe", "Web", "web_probe", "run_scan", "web"),
+        ("6/10 TLS Posture", "TLS", "tls_posture", "run_scan", "tls"),
+        ("7/10 Credentialed Checks", "Credentialed", "credentialed_scan", "run_scan", "credentialed"),
+        ("8/10 Local Hardening", "Local", "local_hardening", "run_scan", "local"),
+        ("9/10 Policy Engine", "Policy", "policy_engine", "run_questionnaire", "policy"),
+        ("10/10 Breach / SaaS", "Enrichment", None, None, "breach"),  # special
+    ]
+
     results = {}
-    def go(name, key, importer):
-        task = progress.add_task(f"[cyan]{name}...", total=None)
+
+    def run_module(label, key, mod_name, attr):
+        console.print(f"[cyan]→ {label}[/cyan]")
         try:
+            mod = __import__(mod_name, fromlist=[attr])
+            fn = getattr(mod, attr)
             nonlocal audit
-            audit = importer()(audit)
+            audit = fn(audit)
             results[key] = "done"
-            progress.update(task, description=f"[green]✓ {name}[/green]")
+            console.print(f"[green]  ✓ {key}[/green]")
+            return True
         except Exception as e:
-            progress.update(task, description=f"[yellow]⚠ {name}: {e}[/yellow]")
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
-        if want("external"):
-            go("ReconVision", "External", lambda: __import__("external_scan", fromlist=["run_scan"]).run_scan)
-            try:
-                from shodan_scan import run_scan as s; audit = s(audit)
-            except Exception: pass
-        if want("vuln", "external"):
-            go("VulnProbe", "Vuln", lambda: __import__("vuln_probe", fromlist=["run_scan"]).run_scan)
-        if want("web"):
-            go("WebProbe", "Web", lambda: __import__("web_probe", fromlist=["run_scan"]).run_scan)
-        if want("tls", "web"):
-            go("TLSPosture", "TLS", lambda: __import__("tls_posture", fromlist=["run_scan"]).run_scan)
-        if want("internal"):
-            go("InternalScan", "Internal", lambda: __import__("internal_scan", fromlist=["run_scan"]).run_scan)
-        if want("local"):
-            go("LocalHardening", "Local", lambda: __import__("local_hardening", fromlist=["run_scan"]).run_scan)
-        if want("credentialed"):
-            go("Credentialed", "Credentialed", lambda: __import__("credentialed_scan", fromlist=["run_scan"]).run_scan)
-        if want("policy"):
-            go("PolicyEngine", "Policy", lambda: __import__("policy_engine", fromlist=["run_questionnaire"]).run_questionnaire)
-        if want("breach"):
-            go("BreachVault", "Breach", lambda: __import__("breach_vault", fromlist=["run_scan"]).run_scan)
-        if want("saas"):
-            go("SaaS-Sentinel", "SaaS", lambda: __import__("saas_sentinel", fromlist=["run_scan"]).run_scan)
-        if want("osint"):
-            go("OSINT", "OSINT", lambda: __import__("osint_recon", fromlist=["run_scan"]).run_scan)
-        if want("inventory"):
-            go("Inventory", "Inventory", lambda: __import__("inventory", fromlist=["run_scan"]).run_scan)
-        if want("plugins"):
-            go("Plugins", "Plugins", lambda: __import__("plugin_loader", fromlist=["run_plugins"]).run_plugins)
-    if "External" in results:
-        results["External"] = f"{audit.get('external_scan',{}).get('targets_count',1)} targets, {len(audit.get('external_scan',{}).get('open_ports',[]))} ports"
-    if "Vuln" in results: results["Vuln"] = f"{len(audit.get('vuln_probe',{}).get('findings',[]))} findings"
-    if "Web" in results: results["Web"] = f"CMS={audit.get('web_probe',{}).get('cms') or 'n/a'}"
-    if "TLS" in results: results["TLS"] = f"{len(audit.get('tls_posture',{}).get('findings',[]))} findings, risk {audit.get('tls_posture',{}).get('risk_score',0)}"
-    if "Internal" in results: results["Internal"] = f"{audit.get('internal_scan',{}).get('hosts_discovered',0)} hosts"
-    if "Local" in results: results["Local"] = f"{len(audit.get('local_hardening',{}).get('findings',[]))} findings"
-    if "Credentialed" in results: results["Credentialed"] = f"{audit.get('credentialed_scan',{}).get('hosts_count',0)} hosts, {len(audit.get('credentialed_scan',{}).get('findings',[]))} findings"
-    if "Policy" in results: results["Policy"] = f"{audit.get('policy_compliance',{}).get('overall_compliance_percentage',0):.0f}%"
-    if "Breach" in results: results["Breach"] = f"{audit.get('breach_exposure',{}).get('compromised_credentials',0)} hits"
-    if "SaaS" in results: results["SaaS"] = audit.get("saas_posture",{}).get("score_grade","?")
-    if "Plugins" in results: results["Plugins"] = f"{len(audit.get('plugins',{}).get('ran',{}))} ran"
+            results[key] = f"error: {e}"
+            console.print(f"[yellow]  ⚠ {key}: {e}[/yellow]")
+            return False
+
+    # Execute selected modules in order
+    if want("external"):
+        run_module("1 · External Discovery (ReconVision)", "External", "external_scan", "run_scan")
+        try:
+            from shodan_scan import run_scan as shodan_run
+            audit = shodan_run(audit)
+        except Exception:
+            pass
+
+    if want("osint"):
+        run_module("2 · OSINT Recon", "OSINT", "osint_recon", "run_scan")
+
+    if want("internal"):
+        run_module("3 · Internal Discovery", "Internal", "internal_scan", "run_scan")
+
+    # Inventory early so web_probe can use host list; rebuild again later
+    if is_full or want("inventory"):
+        run_module("· Inventory (interim)", "Inventory", "inventory", "run_scan")
+
+    if want("vuln", "external"):
+        run_module("4 · Vulnerability Probe", "Vuln", "vuln_probe", "run_scan")
+
+    if want("web"):
+        run_module("5 · Web Probe", "Web", "web_probe", "run_scan")
+
+    if want("tls", "web"):
+        run_module("6 · TLS Posture", "TLS", "tls_posture", "run_scan")
+
+    if want("credentialed"):
+        run_module("7 · Credentialed Checks", "Credentialed", "credentialed_scan", "run_scan")
+
+    if want("local"):
+        run_module("8 · Local Hardening", "Local", "local_hardening", "run_scan")
+
+    if want("policy"):
+        run_module("9 · Policy Engine", "Policy", "policy_engine", "run_questionnaire")
+
+    if want("breach") or is_full:
+        try:
+            console.print("[cyan]→ 10 · Breach Vault[/cyan]")
+            from breach_vault import run_scan as bv
+            audit = bv(audit)
+            results["Breach"] = "done"
+            console.print("[green]  ✓ Breach[/green]")
+        except Exception as e:
+            results["Breach"] = f"skip: {e}"
+            console.print(f"[dim]  · Breach skipped: {e}[/dim]")
+
+    if want("saas") or is_full:
+        try:
+            console.print("[cyan]→ · SaaS Sentinel[/cyan]")
+            from saas_sentinel import run_scan as ss
+            audit = ss(audit)
+            results["SaaS"] = "done"
+            console.print("[green]  ✓ SaaS[/green]")
+        except Exception as e:
+            results["SaaS"] = f"skip: {e}"
+            console.print(f"[dim]  · SaaS skipped: {e}[/dim]")
+
+    if want("plugins") or is_full:
+        try:
+            console.print("[cyan]→ · Plugins[/cyan]")
+            from plugin_loader import run_plugins
+            audit = run_plugins(audit)
+            results["Plugins"] = "done"
+            console.print("[green]  ✓ Plugins[/green]")
+        except Exception as e:
+            results["Plugins"] = f"skip: {e}"
+
+    # Final inventory + scoring always for full, or when inventory requested
     try:
         from inventory import build_inventory
         audit = build_inventory(audit)
-        results["Inventory"] = f"{audit.get('inventory',{}).get('asset_count',0)} assets"
+        results["Inventory"] = f"{audit.get('inventory', {}).get('asset_count', 0)} assets"
+        console.print(f"[green]✓ Inventory: {results['Inventory']}[/green]")
     except Exception as ie:
         console.print(f"[yellow]Inventory: {ie}[/yellow]")
+
     try:
         from scoring import apply_scoring
         audit = apply_scoring(audit)
-        results["Score"] = f"{audit.get('scoring',{}).get('score',0)}/100 {audit.get('scoring',{}).get('grade','?')}"
+        sc = audit.get("scoring", {})
+        results["Score"] = f"{sc.get('score', 0)}/100 {sc.get('grade', '?')}"
+        console.print(f"[green]✓ Score: {results['Score']}[/green]")
     except Exception as se:
         console.print(f"[yellow]Scoring: {se}[/yellow]")
+
+    # Human-readable result summaries
+    if "External" in results and results["External"] == "done":
+        results["External"] = (
+            f"{audit.get('external_scan', {}).get('targets_count', 1)} targets, "
+            f"{len(audit.get('external_scan', {}).get('open_ports', []))} ports"
+        )
+    if "Vuln" in results and results["Vuln"] == "done":
+        results["Vuln"] = f"{len(audit.get('vuln_probe', {}).get('findings', []))} findings"
+    if "Web" in results and results["Web"] == "done":
+        results["Web"] = f"CMS={audit.get('web_probe', {}).get('cms') or 'n/a'}, {len(audit.get('web_probe', {}).get('findings', []))} findings"
+    if "TLS" in results and results["TLS"] == "done":
+        results["TLS"] = (
+            f"{len(audit.get('tls_posture', {}).get('findings', []))} findings, "
+            f"risk {audit.get('tls_posture', {}).get('risk_score', 0)}"
+        )
+    if "Internal" in results and results["Internal"] == "done":
+        results["Internal"] = f"{audit.get('internal_scan', {}).get('hosts_discovered', 0)} hosts"
+    if "Local" in results and results["Local"] == "done":
+        results["Local"] = f"{len(audit.get('local_hardening', {}).get('findings', []))} findings"
+    if "Credentialed" in results and results["Credentialed"] == "done":
+        results["Credentialed"] = (
+            f"{audit.get('credentialed_scan', {}).get('hosts_count', 0)} hosts, "
+            f"{len(audit.get('credentialed_scan', {}).get('findings', []))} findings"
+        )
+    if "Policy" in results and results["Policy"] == "done":
+        results["Policy"] = f"{audit.get('policy_compliance', {}).get('overall_compliance_percentage', 0):.0f}%"
+    if "Breach" in results and results["Breach"] == "done":
+        results["Breach"] = f"{audit.get('breach_exposure', {}).get('compromised_credentials', 0)} hits"
+    if "SaaS" in results and results["SaaS"] == "done":
+        results["SaaS"] = audit.get("saas_posture", {}).get("score_grade", "?")
+    if "OSINT" in results and results["OSINT"] == "done":
+        results["OSINT"] = f"{len(audit.get('osint_recon', {}).get('subdomains', []))} subdomains"
+
     updated = save_audit(audit, f"{client}_updated", passphrase=passphrase)
-    console.print("\n[bold green]═══ Complete ═══[/bold green]")
+    console.print("\n[bold green]═══ Audit Complete ═══[/bold green]")
     if results:
-        t = Table(box=box.ROUNDED); t.add_column("Module", style="cyan"); t.add_column("Result")
-        for m, r in results.items(): t.add_row(m, str(r))
+        t = Table(box=box.ROUNDED, title="Module Results")
+        t.add_column("Module", style="cyan")
+        t.add_column("Result")
+        for m, r in results.items():
+            t.add_row(m, str(r))
         console.print(t)
-    console.print(f"[dim]{updated.name}[/dim] → fortifyone report -f {updated.name}")
+    console.print(f"\n[bold]Next:[/bold] python3 main.py report -f {updated.name}")
+    console.print(f"[dim]Then:[/dim]  python3 main.py pack -f {updated.name}")
+
 
 @app.command()
 def report(audit_file: str = typer.Option(..., "--file", "-f"),
