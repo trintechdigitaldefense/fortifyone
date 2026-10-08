@@ -28,7 +28,7 @@ python3 main.py init -c "Client Name" -d example.com -i 203.0.113.10 \
 
 # 2. Run modules (full or selective)
 python3 main.py run -m all -f <engagement.json>
-# or: -m external,osint,web,tls,vuln,credentialed,policy
+# or: -m external,internal,inventory,osint,web,tls,vuln,credentialed,policy
 
 # 3. Professional deliverables
 python3 main.py report -f <updated.json>
@@ -46,8 +46,8 @@ Engagement IDs look like `ENG-261006-A1B2C3`.
 
 | Capability | Status |
 |------------|--------|
-| Discovery & inventory | External multi-target + internal + OSINT |
-| Vulnerability identification | 35+ safe templates + NSE-oriented VulnProbe |
+| Discovery & inventory | **v6.2 strengthened** — external multi-target, internal host discovery + service/OS fingerprinting, hostname resolution, consolidated inventory with roles & criticality |
+| Vulnerability identification | Safe NSE scripts + version heuristics + exposure rules + templates |
 | Configuration / hardening | Multi-host SSH credentialed + WinRM path |
 | Web application coverage | Paths, CMS, headers, TLS posture |
 | OSINT | DNS, WHOIS, SPF/DMARC, common subdomains |
