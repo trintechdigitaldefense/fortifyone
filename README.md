@@ -1,27 +1,25 @@
-# 🔐 FortifyOne Audit Engine v6.1
+# FortifyOne — Professional Network Audit Engine
 
-[![Version](https://img.shields.io/badge/version-6.1.0-blue)](https://github.com/trintechdigitaldefense/fortifyone)
+**TrinTech Digital Defense** · Trinidad & Tobago 🇹🇹
 
-**Primary professional network audit platform — TrinTech Digital Defense**
-
-One coherent workflow for chargeable, defensible assessments:
+Primary platform for chargeable, defensible network security assessments.
 
 ```text
 fortifyone init  →  fortifyone run  →  fortifyone report  →  fortifyone pack
 ```
 
-Sentinel, Mirage, and trintech-guardian remain **post-audit** continuous protection tools.  
+Sentinel and Mirage are the **post-audit** continuous protection layer.  
 FortifyOne is the **only** primary audit engine.
 
 ---
 
-## ⚠ AUTHORIZED USE ONLY
+## Authorized Use Only
 
-Authorized assessments only. Unauthorized scanning is illegal under the Trinidad & Tobago Cybercrime Act and equivalent laws. Always record ROE / authorization reference.
+Authorized assessments only. Unauthorized scanning is illegal under the Trinidad & Tobago Cybercrime Act and equivalent laws. Always record the ROE / authorization reference.
 
 ---
 
-## Operator workflow (locked)
+## Operator Workflow
 
 ```bash
 # 1. Create engagement with ROE
@@ -44,19 +42,18 @@ Engagement IDs look like `ENG-261006-A1B2C3`.
 
 ---
 
-## What v6 absorbs / strengthens
+## Core Capabilities
 
 | Capability | Status |
 |------------|--------|
-| Discovery & inventory | External multi-target + internal + OSINT subdomain/DNS/WHOIS hints |
+| Discovery & inventory | External multi-target + internal + OSINT |
 | Vulnerability identification | 35+ safe templates + NSE-oriented VulnProbe |
 | Configuration / hardening | Multi-host SSH credentialed + WinRM path |
-| Web application coverage | Expanded paths, CMS, headers, TLS posture |
-| OSINT | DNS, WHOIS summary, SPF/DMARC, common subdomain resolution |
-| Professional reporting | Branded PDF, letter, interactive dashboard, redacted mode |
-| Scoring & roadmap | 100−penalty score, Grade A–F, Immediate/This Week/This Month/Ongoing |
+| Web application coverage | Paths, CMS, headers, TLS posture |
+| OSINT | DNS, WHOIS, SPF/DMARC, common subdomains |
+| Professional reporting | Branded PDF, letter, dashboard, redacted mode |
+| Scoring & roadmap | Score 0–100, Grade A–F, prioritized remediation |
 | Evidence chain | Signed reports + EvidencePack ZIP |
-| Secrets | Passphrase, key file, optional OS keyring |
 
 ---
 
@@ -67,28 +64,31 @@ git clone https://github.com/trintechdigitaldefense/fortifyone.git
 cd fortifyone
 pip3 install -r requirements.txt
 # Recommended: nmap, dig, whois, ssh client
-# Optional: pywinrm, keyring
 python3 main.py about
 ```
 
 ---
 
-## Modules
+## Continuous Protection Package
 
-ReconVision · Inventory · OSINT · VulnProbe · WebProbe · TLSPosture · InternalScan · LocalHardening · Credentialed (SSH multi-host + WinRM) · PolicyEngine · BreachVault · SaaS-Sentinel · Scoring · ReportGenius · Dashboard · EvidencePack · WatchMode · PluginLoader · CryptoUtils
-
----
-
-## Keep separate (do not merge)
-
-- **Sentinel** — continuous monitoring, FIM, reverse-shell
-- **Mirage** — pure deception layer
-- **trintech-guardian** — active containment / IPS
+| Component | Role |
+|-----------|------|
+| **FortifyOne** | Professional point-in-time network audit (this tool) |
+| **Sentinel** | Continuous monitoring, FIM, reverse-shell detection |
+| **Mirage** | Active deception layer |
 
 ---
 
-## License & contact
+## Contact
+
+**TrinTech Digital Defense**  
+Email: trintechdigitaldefense@gmail.com  
+WhatsApp: +1 (868) 362-0679  
+Web: https://trintechdigitaldefense.github.io
+
+---
 
 Authorized defensive use only.  
-TrinTech Digital Defense · Trinidad & Tobago  
-https://trintechdigitaldefense.github.io
+Unauthorized access is illegal under the Trinidad & Tobago Cybercrime Act and applicable law.
+
+*Defend. Detect. Dominate.*
