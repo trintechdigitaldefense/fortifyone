@@ -26,9 +26,11 @@ Authorized assessments only. Unauthorized scanning is illegal under the Trinidad
 python3 main.py init -c "Client Name" -d example.com -i 203.0.113.10 \
   --roe "ROE-2026-042 / Jane Doe" --service smallbiz --industry Technology
 
-# 2. Run modules (full or selective)
-python3 main.py run -m all -f <engagement.json>
-# or: -m external,internal,inventory,osint,web,tls,vuln,credentialed,policy
+# 2. Run the full ordered pipeline (recommended)
+python3 main.py run -m full -f <engagement.json>
+
+# Or selective modules:
+# python3 main.py run -m external,internal,web,vuln -f <engagement.json>
 
 # 3. Professional deliverables
 python3 main.py report -f <updated.json>
@@ -38,6 +40,9 @@ python3 main.py report -f <updated.json> --redacted   # client-shareable
 python3 main.py pack -f <updated.json>
 ```
 
+**Full pipeline order:**  
+External Discovery → OSINT → Internal Discovery → Inventory → VulnProbe → WebProbe → TLS → Credentialed → Local Hardening → Policy → Breach/SaaS → Final Inventory + Score
+
 Engagement IDs look like `ENG-261006-A1B2C3`.
 
 ---
@@ -46,10 +51,11 @@ Engagement IDs look like `ENG-261006-A1B2C3`.
 
 | Capability | Status |
 |------------|--------|
-| Discovery & inventory | **v6.2 strengthened** — external multi-target, internal host discovery + service/OS fingerprinting, hostname resolution, consolidated inventory with roles & criticality |
+| Discovery & inventory | **v6.2** — multi-target external, internal host discovery + fingerprinting, consolidated inventory with roles & criticality |
 | Vulnerability identification | Safe NSE scripts + version heuristics + exposure rules + templates |
 | Configuration / hardening | Multi-host SSH credentialed + WinRM path |
-| Web application coverage | **v6.2 strengthened** — multi-target web hosts, expanded CMS/tech fingerprinting, security headers, cookie flags, sensitive path exposure |
+| Web application coverage | **v6.2** — multi-target, CMS/tech fingerprinting, headers, cookies, sensitive paths |
+| Ordered full pipeline | **v6.2** — `run -m full` runs modules in the correct sequence with clear progress |
 | OSINT | DNS, WHOIS, SPF/DMARC, common subdomains |
 | Professional reporting | Branded PDF, letter, dashboard, redacted mode |
 | Scoring & roadmap | Score 0–100, Grade A–F, prioritized remediation |
