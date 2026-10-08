@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """
-ReconVision - External Footprint Scanner (v4.3 Multi-Target)
+ReconVision - External Footprint Scanner (v6.2)
 TrinTech Digital Defense
 
-Supports single IP, domain, multiple targets, and CIDR ranges.
+Multi-target external discovery with improved service fingerprinting.
+Supports single IP, domain, multiple targets, and small CIDR ranges.
 Authorized use only.
 """
+
+from __future__ import annotations
 
 import datetime
 import ipaddress
 import re
 import subprocess
-from typing import List, Dict, Any, Tuple, Optional
+from typing import Any, Dict, List, Optional
 
 
 def is_valid_domain(domain: str) -> bool:
@@ -28,21 +31,18 @@ def is_valid_domain(domain: str) -> bool:
 
 
 def parse_target(raw: str) -> Optional[Dict[str, str]]:
-    """
-    Parse a single target string into a normalized dict.
-    Returns None if invalid.
-    Supports: IPv4, IPv6, CIDR (v4/v6), domain.
-    """
+    """Parse a single target into a normalized dict. None if invalid."""
     raw = (raw or "").strip()
     if not raw:
         return None
 
-    # Try CIDR / IP first
     try:
         net = ipaddress.ip_network(raw, strict=False)
-        # Safety: reject huge ranges
-        if net.num_addresses > 512:  # /23 and larger blocked for external scans
-            print(f"[RECONVISION] Skipping oversized range {raw} ({net.num_addresses} addresses). Max /23 (512 hosts).")
+        if net.num_addresses > 512:  # max /23 for external
+            print(
+                f"[RECONVISION] Skipping oversized range {raw} "
+                f"({net.num_addresses} addresses). Max /23."
+            )
             return None
         return {
             "type": "cidr" if "/" in raw else "ip",
@@ -52,7 +52,6 @@ def parse_target(raw: str) -> Optional[Dict[str, str]]:
     except ValueError:
         pass
 
-    # Domain
     if is_valid_domain(raw):
         return {"type": "domain", "value": raw.lower(), "original": raw}
 
@@ -60,22 +59,16 @@ def parse_target(raw: str) -> Optional[Dict[str, str]]:
 
 
 def collect_targets(audit_data: dict) -> List[Dict[str, str]]:
-    """
-    Build the list of targets to scan from scope.in_scope_targets
-    plus legacy public_ip / domain fields.
-    """
+    """Build target list from scope + legacy metadata fields."""
     targets: List[Dict[str, str]] = []
     seen = set()
 
-    # Prefer explicit scope list
-    scope_targets = audit_data.get("scope", {}).get("in_scope_targets", []) or []
-    for t in scope_targets:
+    for t in audit_data.get("scope", {}).get("in_scope_targets", []) or []:
         parsed = parse_target(str(t))
         if parsed and parsed["value"] not in seen:
             targets.append(parsed)
             seen.add(parsed["value"])
 
-    # Fallback / also include primary fields if not already present
     meta = audit_data.get("audit_metadata", {})
     for key in ("public_ip", "domain"):
         val = meta.get(key, "")
@@ -88,19 +81,31 @@ def collect_targets(audit_data: dict) -> List[Dict[str, str]]:
     return targets
 
 
-def scan_single_target(target: Dict[str, str], timeout: int = 180) -> Dict[str, Any]:
-    """Scan one target (IP, domain, or small CIDR). Returns result dict."""
+def _risk_for_port(port: str, service: str) -> str:
+    p = str(port)
+    s = (service or "").lower()
+    if p in ("3389", "445", "135", "139", "5900") or "ms-wbt" in s or "microsoft-ds" in s:
+        return "critical"
+    if p in ("22", "23", "21", "3306", "5432", "1433", "27017", "6379", "9200", "2375", "2376"):
+        return "high"
+    if p in ("80", "443", "8080", "8443", "25", "587", "465"):
+        return "medium"
+    return "medium"
+
+
+def scan_single_target(target: Dict[str, str], timeout: int = 200) -> Dict[str, Any]:
+    """Scan one target (IP, domain, or small CIDR)."""
     value = target["value"]
     ttype = target["type"]
-    result = {
+    result: Dict[str, Any] = {
         "target": value,
         "type": ttype,
         "open_ports": [],
+        "hosts": [],
         "findings": [],
         "error": None,
     }
 
-    # Refuse localhost
     if value in ("0.0.0.0", "127.0.0.1", "::1", "localhost") or value.startswith("127."):
         result["error"] = "Refusing to scan localhost"
         result["findings"].append("[ERROR] Refusing to scan localhost / zero address")
@@ -112,55 +117,66 @@ def scan_single_target(target: Dict[str, str], timeout: int = 180) -> Dict[str, 
         cmd = [
             "nmap",
             "-sS",
+            "-sV",
             "-T4",
             "--top-ports", "100",
-            "-sV",
-            "--version-intensity", "3",
+            "--version-intensity", "4",
             "--open",
             "--max-retries", "2",
-            "--host-timeout", "90s",
+            "--host-timeout", "100s",
             value,
         ]
         res = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
+            cmd, capture_output=True, text=True, timeout=timeout, check=False
         )
+        output = res.stdout or ""
 
-        current_host = value
-        if "Nmap scan report" not in res.stdout and res.returncode != 0:
+        if "Nmap scan report" not in output and res.returncode != 0:
             result["error"] = f"nmap rc={res.returncode}"
-            result["findings"].append(f"[ERROR] nmap failed: {res.stderr[:150]}")
-        else:
-            for line in res.stdout.splitlines():
-                if "Nmap scan report for" in line:
-                    # Extract host if scanning a range
-                    parts = line.split()
-                    current_host = parts[-1].strip("()")
-                elif "/tcp" in line and "open" in line:
+            result["findings"].append(f"[ERROR] nmap failed: {(res.stderr or '')[:150]}")
+            return result
+
+        # Parse per-host blocks
+        blocks = re.split(r"Nmap scan report for ", output)
+        for block in blocks[1:]:
+            first = block.splitlines()[0] if block else ""
+            # Extract host / IP
+            host_label = first.strip()
+            ip_match = re.search(r"(\d{1,3}(?:\.\d{1,3}){3})", first)
+            host_ip = ip_match.group(1) if ip_match else host_label.split()[0].strip("()")
+
+            host_rec = {
+                "host": host_ip,
+                "label": host_label[:120],
+                "ports": [],
+                "services": [],
+            }
+
+            for line in block.splitlines():
+                if "/tcp" in line and "open" in line:
                     parts = line.split()
                     port_id = parts[0].split("/")[0]
-                    service = parts[2] if len(parts) > 2 else "unknown"
+                    service = " ".join(parts[2:]).strip() if len(parts) > 2 else "unknown"
+                    risk = _risk_for_port(port_id, service)
 
-                    if port_id in ("3389", "445", "135", "139", "5900"):
-                        risk = "critical"
-                    elif port_id in ("22", "23", "21", "3306", "5432", "1433", "27017"):
-                        risk = "high"
-                    else:
-                        risk = "medium"
-
-                    result["open_ports"].append({
-                        "host": current_host,
+                    port_entry = {
+                        "host": host_ip,
                         "port": port_id,
                         "service": service,
                         "risk_level": risk,
                         "source": "nmap",
-                    })
+                    }
+                    result["open_ports"].append(port_entry)
+                    host_rec["ports"].append(port_id)
+                    if service not in host_rec["services"]:
+                        host_rec["services"].append(service)
+
                     result["findings"].append(
-                        f"[ACTIVE] {current_host}:{port_id} ({service}) OPEN — {risk}"
+                        f"[ACTIVE] {host_ip}:{port_id} ({service}) OPEN — {risk}"
                     )
+
+            if host_rec["ports"]:
+                result["hosts"].append(host_rec)
 
     except subprocess.TimeoutExpired:
         result["error"] = "timeout"
@@ -176,18 +192,18 @@ def scan_single_target(target: Dict[str, str], timeout: int = 180) -> Dict[str, 
 
 
 def run_scan(audit_data: dict) -> dict:
-    """
-    Multi-target external scan.
-    Uses scope.in_scope_targets when present; falls back to single public_ip/domain.
-    """
+    """Multi-target external scan with improved fingerprinting."""
     targets = collect_targets(audit_data)
 
     if not targets:
         audit_data["external_scan"] = {
             "open_ports": [],
+            "hosts": [],
             "vulnerabilities": ["[ERROR] No valid targets found"],
             "risk_score": 0,
             "targets_scanned": [],
+            "targets_count": 0,
+            "errors": 0,
             "scan_timestamp": datetime.datetime.now().isoformat(),
             "error": "No valid targets",
         }
@@ -197,11 +213,11 @@ def run_scan(audit_data: dict) -> dict:
     print(f"\n[RECONVISION] Multi-target mode: {len(targets)} target(s)")
 
     all_ports: List[Dict] = []
+    all_hosts: List[Dict] = []
     all_findings: List[str] = []
     per_target: List[Dict] = []
     errors = 0
 
-    # Safety limit
     max_targets = 30
     if len(targets) > max_targets:
         print(f"[RECONVISION] Limiting to first {max_targets} targets (had {len(targets)})")
@@ -213,28 +229,34 @@ def run_scan(audit_data: dict) -> dict:
             "target": res["target"],
             "type": res["type"],
             "open_ports_count": len(res["open_ports"]),
+            "hosts_count": len(res.get("hosts") or []),
             "error": res["error"],
         })
         all_ports.extend(res["open_ports"])
+        all_hosts.extend(res.get("hosts") or [])
         all_findings.extend(res["findings"])
         if res["error"]:
             errors += 1
 
-    # Aggregate risk
-    critical = sum(1 for p in all_ports if p["risk_level"] == "critical")
-    high = sum(1 for p in all_ports if p["risk_level"] == "high")
+    critical = sum(1 for p in all_ports if p.get("risk_level") == "critical")
+    high = sum(1 for p in all_ports if p.get("risk_level") == "high")
     medium = len(all_ports) - critical - high
-    risk_score = min(critical * 30 + high * 15 + medium * 6, 100)
+    risk_score = min(critical * 30 + high * 15 + medium * 5, 100)
 
     audit_data["external_scan"] = {
         "open_ports": all_ports,
+        "hosts": all_hosts,
         "vulnerabilities": all_findings,
         "risk_score": risk_score,
         "targets_scanned": per_target,
         "targets_count": len(targets),
         "errors": errors,
         "scan_timestamp": datetime.datetime.now().isoformat(),
+        "note": "External footprint with service version detection. Non-destructive.",
     }
 
-    print(f"[RECONVISION] Complete: {len(targets)} targets, {len(all_ports)} open ports | Risk: {risk_score}/100\n")
+    print(
+        f"[RECONVISION] Complete: {len(targets)} targets, "
+        f"{len(all_hosts)} host(s), {len(all_ports)} open ports | Risk: {risk_score}/100\n"
+    )
     return audit_data
