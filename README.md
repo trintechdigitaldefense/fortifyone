@@ -53,12 +53,13 @@ Engagement IDs look like `ENG-261006-A1B2C3`.
 |------------|--------|
 | Discovery & inventory | **v6.2** — multi-target external, internal host discovery + fingerprinting, consolidated inventory with roles & criticality |
 | Vulnerability identification | Safe NSE scripts + version heuristics + exposure rules + templates |
-| Configuration / hardening | Multi-host SSH credentialed + WinRM path |
+| Configuration / hardening | **v6.2** — multi-host SSH with retries, per-host isolation, clear ok/fail status + WinRM path |
 | Web application coverage | **v6.2** — multi-target, CMS/tech fingerprinting, headers, cookies, sensitive paths |
 | Ordered full pipeline | **v6.2** — `run -m full` runs modules in the correct sequence with clear progress |
+| Client-ready language | **v6.2** — plain-English executive summary and remediation roadmap for T&T / Caribbean SMB owners |
 | OSINT | DNS, WHOIS, SPF/DMARC, common subdomains |
 | Professional reporting | Branded PDF, letter, dashboard, redacted mode |
-| Scoring & roadmap | Score 0–100, Grade A–F, prioritized remediation |
+| Scoring & roadmap | Score 0–100, Grade A–F, Immediate / This Week / This Month / Ongoing |
 | Evidence chain | Signed reports + EvidencePack ZIP |
 
 ---
