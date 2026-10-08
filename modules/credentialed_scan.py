@@ -44,18 +44,25 @@ def _ssh_base(host: str, user: str, key: str, port: int) -> List[str]:
 
 
 def _run_ssh(host: str, user: str, key: str, port: int, remote_cmd: str, timeout: int = 25) -> Tuple[int, str]:
+    """Run a remote command; one retry on timeout for flaky links."""
     base = _ssh_base(host, user, key, port)
     full = base + [remote_cmd]
-    try:
-        r = subprocess.run(full, capture_output=True, text=True, timeout=timeout)
-        out = (r.stdout or "") + (r.stderr or "")
-        return r.returncode, out.strip()
-    except subprocess.TimeoutExpired:
-        return -1, "timeout"
-    except FileNotFoundError:
-        return -2, "ssh binary not found"
-    except Exception as e:
-        return -3, f"{type(e).__name__}: {e}"
+    last_err = "timeout"
+    for attempt in range(2):
+        try:
+            r = subprocess.run(full, capture_output=True, text=True, timeout=timeout)
+            out = (r.stdout or "") + (r.stderr or "")
+            return r.returncode, out.strip()
+        except subprocess.TimeoutExpired:
+            last_err = "timeout"
+            if attempt == 0:
+                continue
+            return -1, last_err
+        except FileNotFoundError:
+            return -2, "ssh binary not found"
+        except Exception as e:
+            return -3, f"{type(e).__name__}: {e}"
+    return -1, last_err
 
 
 def _load_inventory() -> List[Dict[str, Any]]:
@@ -485,6 +492,7 @@ def run_scan(
 ) -> dict:
     """
     Multi-host credentialed SSH checks + WinRM readiness / optional auth.
+    Per-host failures are isolated — one bad host does not abort the module.
     Skips cleanly if nothing is configured.
     """
     print("\n[CREDENTIALED] Starting credentialed checks (SSH multi-host + WinRM)...")
@@ -505,40 +513,100 @@ def run_scan(
     total_checks = 0
     hosts_scanned: List[Dict[str, Any]] = []
     winrm_results: List[Dict[str, Any]] = []
+    ok_hosts = 0
+    failed_hosts = 0
 
     if not inventory:
         audit_data["credentialed_scan"] = {
             "enabled": False,
             "hosts_scanned": [],
+            "hosts_count": 0,
+            "checks_run": 0,
             "findings": [],
             "risk_score": 0,
             "winrm": {},
-            "note": "Skipped — set FORTIFYONE_SSH_HOST/USER (and KEY) or FORTIFYONE_SSH_INVENTORY",
+            "winrm_all": [],
+            "ok_hosts": 0,
+            "failed_hosts": 0,
+            "note": (
+                "Skipped — set FORTIFYONE_SSH_HOST + FORTIFYONE_SSH_USER "
+                "(+ FORTIFYONE_SSH_KEY) or FORTIFYONE_SSH_INVENTORY for multi-host."
+            ),
             "scan_timestamp": datetime.datetime.now().isoformat(),
         }
         print("[CREDENTIALED] Skipped (no hosts configured).")
         return audit_data
 
     for entry in inventory:
-        if entry.get("type") == "winrm":
-            wr = _winrm_checks(entry.get("host", ""), entry.get("user"))
-            winrm_results.append(wr)
-            for f in wr.get("findings", []):
-                all_findings.append(f)
-            hosts_scanned.append({"host": entry.get("host"), "type": "winrm", "status": wr.get("status")})
-        else:
-            h = entry["host"]
-            u = entry.get("user") or ""
-            k = entry.get("key") or ""
-            p = int(entry.get("port") or 22)
-            print(f"[CREDENTIALED] SSH → {u}@{h}:{p}")
-            findings, checks = _ssh_checks(h, u, k, p)
-            all_findings.extend(findings)
-            total_checks += checks
+        try:
+            if entry.get("type") == "winrm":
+                wr = _winrm_checks(entry.get("host", ""), entry.get("user"))
+                winrm_results.append(wr)
+                for f in wr.get("findings", []):
+                    all_findings.append(f)
+                status = wr.get("status") or "unknown"
+                hosts_scanned.append({
+                    "host": entry.get("host"),
+                    "type": "winrm",
+                    "status": status,
+                })
+                if status.startswith("authenticated") or "ports_open" in str(status):
+                    ok_hosts += 1
+                else:
+                    failed_hosts += 1
+            else:
+                h = entry["host"]
+                u = entry.get("user") or ""
+                k = entry.get("key") or ""
+                p = int(entry.get("port") or 22)
+                print(f"[CREDENTIALED] SSH → {u}@{h}:{p}")
+                try:
+                    findings, checks = _ssh_checks(h, u, k, p)
+                except Exception as host_err:
+                    findings = [{
+                        "title": f"Credentialed scan error on {h}",
+                        "detail": str(host_err)[:300],
+                        "severity": "info",
+                        "category": "Credentialed",
+                        "host": h,
+                    }]
+                    checks = 0
+                all_findings.extend(findings)
+                total_checks += checks
+                # Connection failed if we only got a connection failure finding
+                connected = not any(
+                    "connection failed" in (f.get("title") or "").lower()
+                    for f in findings
+                )
+                if connected and checks > 0:
+                    ok_hosts += 1
+                    status = "ok"
+                else:
+                    failed_hosts += 1
+                    status = "failed"
+                hosts_scanned.append({
+                    "host": h,
+                    "user": u,
+                    "type": "ssh",
+                    "status": status,
+                    "findings": len(findings),
+                    "checks_run": checks,
+                })
+        except Exception as e:
+            failed_hosts += 1
             hosts_scanned.append({
-                "host": h, "user": u, "type": "ssh",
-                "findings": len(findings), "checks_run": checks,
+                "host": entry.get("host"),
+                "type": entry.get("type") or "ssh",
+                "status": f"error: {type(e).__name__}",
             })
+            all_findings.append({
+                "title": f"Host entry failed: {entry.get('host')}",
+                "detail": str(e)[:250],
+                "severity": "info",
+                "category": "Credentialed",
+                "host": str(entry.get("host") or ""),
+            })
+            print(f"[CREDENTIALED] ⚠ Host error ({entry.get('host')}): {e}")
 
     critical = sum(1 for f in all_findings if f.get("severity") == "critical")
     high = sum(1 for f in all_findings if f.get("severity") == "high")
@@ -547,19 +615,37 @@ def run_scan(
 
     primary_winrm = winrm_results[0] if winrm_results else {}
 
+    note_parts = [
+        "SSH key-based multi-host checks. Passwords never stored in audit JSON.",
+        f"Success: {ok_hosts} host(s). Failed/unreachable: {failed_hosts}.",
+    ]
+    if failed_hosts and ok_hosts:
+        note_parts.append(
+            "Partial success — findings from reachable hosts are still valid."
+        )
+    if failed_hosts and not ok_hosts:
+        note_parts.append(
+            "No host completed successfully. Verify keys, network path, and inventory file."
+        )
+
     audit_data["credentialed_scan"] = {
         "enabled": True,
         "hosts_scanned": hosts_scanned,
         "hosts_count": len(hosts_scanned),
+        "ok_hosts": ok_hosts,
+        "failed_hosts": failed_hosts,
         "checks_run": total_checks,
         "findings": all_findings,
         "risk_score": risk_score,
         "winrm": primary_winrm,
         "winrm_all": winrm_results,
         "scan_timestamp": datetime.datetime.now().isoformat(),
-        "note": "SSH key-based multi-host MVP. Passwords never stored in audit JSON.",
+        "note": " ".join(note_parts),
     }
-    print(f"[CREDENTIALED] Complete: {len(hosts_scanned)} host(s), {len(all_findings)} findings | Risk {risk_score}/100\n")
+    print(
+        f"[CREDENTIALED] Complete: {ok_hosts} ok / {failed_hosts} failed, "
+        f"{len(all_findings)} findings | Risk {risk_score}/100\n"
+    )
     return audit_data
 
 
